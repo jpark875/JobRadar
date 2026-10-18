@@ -168,3 +168,29 @@ def test_registry_fields_are_well_formed():
     for adapter in REGISTRY.values():
         assert adapter.label and adapter.covers
         assert len({f.name for f in adapter.fields}) == len(adapter.fields)
+
+
+def test_careers_source_resolves_urls_and_names():
+    from jobradar.sources.ats import resolve_board
+
+    assert resolve_board("https://boards.greenhouse.io/stripe") == ("greenhouse", "stripe")
+    assert resolve_board("https://job-boards.greenhouse.io/discord/jobs/123") == ("greenhouse", "discord")
+    assert resolve_board("jobs.lever.co/plaid") == ("lever", "plaid")
+    assert resolve_board("https://jobs.ashbyhq.com/ramp?utm=x") == ("ashby", "ramp")
+    assert resolve_board("Notion Labs") == (None, "notionlabs")
+
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.host)
+        if request.url.host == "api.lever.co" and request.url.path.endswith("/plaid"):
+            return httpx.Response(200, json=PAYLOADS["api.lever.co"])
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    jobs = get_source("careers").fetch({"companies": "plaid"}, SourceContext(), client)
+    assert [j.title for j in jobs] == ["Backend Engineer"]
+    assert seen == ["boards-api.greenhouse.io", "api.lever.co"]
+
+    with pytest.raises(SourceError, match="careers page link"):
+        get_source("careers").fetch({"companies": "nobody"}, SourceContext(), client)

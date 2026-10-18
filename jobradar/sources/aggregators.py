@@ -22,7 +22,9 @@ def _date_window(max_age_days: int) -> str:
 
 class JSearchSource(BaseSource):
     kind = "jsearch"
-    label = "JSearch (Indeed, LinkedIn, Glassdoor, ZipRecruiter)"
+    label = "Indeed & LinkedIn search (JSearch)"
+    needs = "A free RapidAPI key"
+    tier = "recommended"
     covers = "Indeed, LinkedIn, Glassdoor, ZipRecruiter, Monster and other boards indexed by Google for Jobs"
     description = (
         "The most reliable way to pull Indeed and LinkedIn listings. Uses the JSearch API on RapidAPI "
@@ -76,6 +78,8 @@ class JSearchSource(BaseSource):
 class AdzunaSource(BaseSource):
     kind = "adzuna"
     label = "Adzuna"
+    needs = "A free API key"
+    tier = "more"
     covers = "Adzuna's index of hundreds of job boards and company sites"
     description = "Free API key from developer.adzuna.com."
     fields = [
@@ -127,6 +131,8 @@ class AdzunaSource(BaseSource):
 class USAJobsSource(BaseSource):
     kind = "usajobs"
     label = "USAJOBS"
+    needs = "A free API key"
+    tier = "more"
     covers = "U.S. federal government jobs and internships (Pathways)"
     description = "Free API key from developer.usajobs.gov."
     fields = [
@@ -178,6 +184,8 @@ class USAJobsSource(BaseSource):
 class JoobleSource(BaseSource):
     kind = "jooble"
     label = "Jooble"
+    needs = "A free API key"
+    tier = "more"
     covers = "Jooble's aggregate of job boards in 60+ countries"
     description = "Free API key from jooble.org/api/about."
     fields = [Field("api_key", "API key", "password", True), KEYWORDS_FIELD, LOCATION_FIELD]
@@ -217,6 +225,8 @@ class JoobleSource(BaseSource):
 class RemotiveSource(BaseSource):
     kind = "remotive"
     label = "Remotive"
+    needs = "Nothing"
+    tier = "free"
     covers = "Remote jobs from Remotive"
     description = "Free, no key required."
     fields = [KEYWORDS_FIELD, Field("category", "Category", "text", False, "e.g. software-dev, data, marketing, design")]
@@ -250,6 +260,8 @@ class RemotiveSource(BaseSource):
 class RemoteOKSource(BaseSource):
     kind = "remoteok"
     label = "Remote OK"
+    needs = "Nothing"
+    tier = "free"
     covers = "Remote jobs from remoteok.com"
     description = "Free, no key required. Returns the latest ~100 remote postings."
     fields = [Field("tags", "Only keep jobs tagged with", "text", False, "Comma separated, e.g. python, marketing")]
@@ -284,6 +296,8 @@ class RemoteOKSource(BaseSource):
 class TheMuseSource(BaseSource):
     kind = "themuse"
     label = "The Muse"
+    needs = "Nothing"
+    tier = "free"
     covers = "Jobs and internships posted on The Muse"
     description = "Works without a key; add a free key from themuse.com/developers for higher limits."
     fields = [

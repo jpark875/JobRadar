@@ -1,5 +1,5 @@
 from .aggregators import AdzunaSource, JoobleSource, JSearchSource, RemoteOKSource, RemotiveSource, TheMuseSource, USAJobsSource
-from .ats import AshbySource, GreenhouseSource, LeverSource, SmartRecruitersSource
+from .ats import AshbySource, CareersSource, GreenhouseSource, LeverSource, SmartRecruitersSource
 from .base import BaseSource, Field, JobPosting, SourceContext, SourceError
 from .email_alerts import EmailAlertsSource
 
@@ -7,6 +7,7 @@ REGISTRY: dict[str, BaseSource] = {
     source.kind: source
     for source in (
         EmailAlertsSource(),
+        CareersSource(),
         JSearchSource(),
         AdzunaSource(),
         JoobleSource(),

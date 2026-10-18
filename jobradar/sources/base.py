@@ -63,6 +63,8 @@ class BaseSource:
     label: str = ""
     covers: str = ""
     description: str = ""
+    needs: str = "Nothing"
+    tier: str = "more"
     fields: list[Field] = []
 
     def fetch(self, config: dict, ctx: SourceContext, client: httpx.Client) -> list[JobPosting]:
@@ -77,7 +79,7 @@ class BaseSource:
         try:
             response = client.get(url, headers=headers, timeout=30, **kwargs)
         except httpx.HTTPError as exc:
-            raise SourceError(f"Request to {url} failed: {exc}") from exc
+            raise SourceError(f"Couldn't reach {httpx.URL(url).host} ({exc}). Check your internet connection; JobRadar will retry on the next check.") from exc
         if response.status_code == 404:
             raise SourceError(f"Not found: {url}")
         if response.status_code in (401, 403):

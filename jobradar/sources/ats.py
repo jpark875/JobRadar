@@ -1,3 +1,5 @@
+import re
+
 import httpx
 
 from ..text import annualize, html_to_text, parse_datetime
@@ -10,6 +12,8 @@ COMPANIES_FIELD = Field(
 
 
 class _ATSSource(BaseSource):
+    tier = "advanced"
+
     def fetch(self, config: dict, ctx: SourceContext, client: httpx.Client) -> list[JobPosting]:
         companies = split_list(config.get("companies"))
         if not companies:
@@ -158,3 +162,59 @@ class SmartRecruitersSource(_ATSSource):
                 board="SmartRecruiters",
             ))
         return out
+
+
+ATS_URL_PATTERNS = [
+    (re.compile(r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_board\?for=)?([\w.-]+)", re.I), "greenhouse"),
+    (re.compile(r"jobs\.(?:eu\.)?lever\.co/([\w.-]+)", re.I), "lever"),
+    (re.compile(r"jobs\.ashbyhq\.com/([\w.%-]+)", re.I), "ashby"),
+    (re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([\w.-]+)", re.I), "smartrecruiters"),
+]
+
+
+def resolve_board(entry: str) -> tuple[str | None, str]:
+    for pattern, kind in ATS_URL_PATTERNS:
+        match = pattern.search(entry)
+        if match:
+            return kind, match.group(1)
+    return None, re.sub(r"[^a-z0-9-]", "", entry.lower().replace(" ", ""))
+
+
+class CareersSource(BaseSource):
+    kind = "careers"
+    label = "Company career pages"
+    needs = "Nothing, no account needed"
+    tier = "recommended"
+    covers = "Any company hiring through Greenhouse, Lever, Ashby or SmartRecruiters"
+    description = (
+        "Paste the careers page links (or just the names) of companies you'd like to work for. "
+        "JobRadar figures out which job platform each one uses."
+    )
+    fields = [Field(
+        "companies", "Companies", "textarea", True,
+        "One per line. A link like boards.greenhouse.io/stripe or jobs.lever.co/plaid works best; a plain name like 'airbnb' is tried on each platform.",
+    )]
+    adapters = {"greenhouse": GreenhouseSource(), "lever": LeverSource(), "ashby": AshbySource(), "smartrecruiters": SmartRecruitersSource()}
+
+    def fetch(self, config: dict, ctx: SourceContext, client: httpx.Client) -> list[JobPosting]:
+        entries = split_list(config.get("companies"))
+        if not entries:
+            raise SourceError("Add at least one company")
+        postings, errors = [], []
+        for entry in entries:
+            kind, slug = resolve_board(entry)
+            kinds = [kind] if kind else ["greenhouse", "lever", "ashby"]
+            found = False
+            for candidate in kinds:
+                try:
+                    jobs = self.adapters[candidate].fetch_company(slug, client)
+                except SourceError:
+                    continue
+                postings.extend(jobs)
+                found = True
+                break
+            if not found:
+                errors.append(entry)
+        if errors and not postings:
+            raise SourceError(f"Couldn't find a job board for: {', '.join(errors)}. Try pasting the company's careers page link.")
+        return postings

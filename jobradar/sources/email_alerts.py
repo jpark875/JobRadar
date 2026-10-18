@@ -221,7 +221,9 @@ def parse_message(raw: bytes | str, board: str | None = None) -> list[JobPosting
 
 class EmailAlertsSource(BaseSource):
     kind = "email"
-    label = "Email job alerts (Indeed, LinkedIn, Handshake, Glassdoor, ZipRecruiter...)"
+    label = "Indeed, LinkedIn & Handshake (job alert emails)"
+    needs = "An email app password"
+    tier = "recommended"
     covers = "Job alert emails from Indeed, LinkedIn, Handshake, Glassdoor, ZipRecruiter, Wellfound and Monster"
     description = (
         "Turn on job alerts in each site, then connect the inbox they arrive in. JobRadar reads those alert emails "
