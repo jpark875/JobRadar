@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 import threading
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
@@ -14,7 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from .. import apply, notify, resume, service
+from .. import apply, grader, notify, resume, service
 from ..config import get_settings
 from ..db import get_session, init_db, session_scope
 from ..models import EXPERIENCE_LEVELS, JOB_STATUSES, PIPELINE_STATUSES, Answer, Channel, Job, Source, SyncRun, utcnow
@@ -28,6 +29,7 @@ log = logging.getLogger("jobradar")
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
 PAGE_SIZE = 50
+SETTINGS_PATHS = ("/profile", "/sources", "/alerts", "/answers", "/import")
 
 
 def _timeago(value: datetime | None) -> str:
@@ -52,6 +54,7 @@ def _score_class(score: float) -> str:
 templates.env.filters["timeago"] = _timeago
 templates.env.filters["score_class"] = _score_class
 templates.env.globals["statuses"] = JOB_STATUSES
+templates.env.tests["fresh"] = lambda job: bool(job.first_seen_at) and utcnow() - job.first_seen_at < timedelta(days=2)
 
 
 def _background_sync(source_ids: list[int] | None = None) -> None:
@@ -123,10 +126,16 @@ def render(request: Request, name: str, session: Session, **context) -> HTMLResp
     context["err"] = request.query_params.get("err", "")
     context["syncing"] = service.sync_running()
     context["nav"] = request.url.path
+    context["in_settings"] = request.url.path.startswith(SETTINGS_PATHS)
     context["queue_count"] = session.scalar(
         select(func.count(Job.id)).where(Job.status == "queued", Job.queued_on <= date.today())
     )
     return templates.TemplateResponse(request, name, context)
+
+
+def _next(value, default: str) -> str:
+    value = str(value or "")
+    return value if value.startswith("/") and not value.startswith("//") else default
 
 
 def _job_or_404(session: Session, job_id: int) -> Job:
@@ -148,28 +157,25 @@ def _back(request: Request, fallback: str) -> str:
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, session: Session = Depends(get_session)):
     profile = service.get_profile(session)
-    fresh = list(session.scalars(
-        select(Job)
-        .where(Job.filtered_out.is_(False), Job.status == "new", Job.first_seen_at >= utcnow() - timedelta(days=2))
-        .order_by(Job.score.desc())
-        .limit(8)
-    ))
+    if not profile.onboarded and not profile.resume_text and not session.scalar(select(func.count(Source.id))):
+        return RedirectResponse("/welcome", status_code=303)
     return render(
         request, "dashboard.html", session,
         stats=service.dashboard_stats(session, profile),
-        fresh=fresh,
-        top=service.recommended(session, limit=8),
+        top=service.recommended(session, limit=10, min_score=30),
+        queue=service.todays_queue(session, profile),
         follow_ups=service.follow_ups_due(session)[:8],
         setup_needed=not profile.resume_text or not session.scalar(select(func.count(Source.id))),
+        report=grader.grade_resume(profile.resume_text, profile.years_experience) if profile.resume_text else None,
     )
 
 
 @app.post("/sync")
 def sync_all(request: Request):
     if service.sync_running():
-        return redirect(_back(request, "/"), err="A sync is already running")
+        return redirect(_back(request, "/"), err="Already checking for jobs. Give it a minute.")
     threading.Thread(target=_background_sync, daemon=True).start()
-    return redirect(_back(request, "/"), msg="Sync started. New jobs will appear in a moment.")
+    return redirect(_back(request, "/"), msg="Checking every connected site for new jobs. This page refreshes on its own.")
 
 
 @app.get("/jobs", response_class=HTMLResponse)
@@ -263,29 +269,34 @@ def job_new(
     return redirect(f"/jobs/{jobs[0].id}", msg="Job added")
 
 
-@app.get("/jobs/{job_id}", response_class=HTMLResponse)
+@app.get("/jobs/{job_id:int}", response_class=HTMLResponse)
 def job_detail(job_id: int, request: Request, session: Session = Depends(get_session)):
     job = _job_or_404(session, job_id)
     profile = service.get_profile(session)
+    fit = grader.job_fit(profile.resume_text, job.title, job.description) if profile.resume_text and job.description else None
     answers = list(session.scalars(select(Answer).order_by(Answer.id)))
     return render(
         request, "job_detail.html", session,
         job=job,
         cover_letter=apply.render(profile.cover_letter_template, profile, job),
+        fit=fit,
         answers=[(a, apply.render(a.answer, profile, job), apply.render(a.question, profile, job)) for a in answers],
     )
 
 
-@app.post("/jobs/{job_id}/status")
-def job_status(job_id: int, request: Request, status: str = Form(...), session: Session = Depends(get_session)):
+@app.post("/jobs/{job_id:int}/status")
+def job_status(job_id: int, request: Request, status: str = Form(""), session: Session = Depends(get_session)):
+    if not status:
+        return redirect(_back(request, f"/jobs/{job_id}"))
     if status not in JOB_STATUSES:
         raise HTTPException(400, "Bad status")
     job = _job_or_404(session, job_id)
     service.set_status(job, status, service.get_profile(session))
-    return redirect(_back(request, f"/jobs/{job_id}"), msg=f"Marked {status}")
+    labels = {"queued": "Added to today's queue", "dismissed": "Marked not interested", "applied": "Marked as applied. A follow-up reminder is set."}
+    return redirect(_back(request, f"/jobs/{job_id}"), msg=labels.get(status, f"Moved to {status}"))
 
 
-@app.post("/jobs/{job_id}/notes")
+@app.post("/jobs/{job_id:int}/notes")
 def job_notes(
     job_id: int,
     notes: str = Form(""),
@@ -298,7 +309,7 @@ def job_notes(
     return redirect(f"/jobs/{job_id}", msg="Saved")
 
 
-@app.get("/jobs/{job_id}/cover-letter.txt")
+@app.get("/jobs/{job_id:int}/cover-letter.txt")
 def cover_letter_download(job_id: int, session: Session = Depends(get_session)):
     job = _job_or_404(session, job_id)
     profile = service.get_profile(session)
@@ -403,24 +414,35 @@ async def profile_save(request: Request, session: Session = Depends(get_session)
     session.flush()
     if form.get("section") in ("preferences", "resume"):
         service.rescore(session)
-    return redirect("/profile", msg="Profile saved" + (" and matches re-scored" if form.get("section") in ("preferences", "resume") else ""))
+    rescored = form.get("section") in ("preferences", "resume")
+    return redirect(_next(form.get("next"), "/profile"), msg="Saved" + (". Match scores updated." if rescored else "."))
 
 
-@app.post("/profile/resume")
-async def resume_upload(file: UploadFile = File(...), session: Session = Depends(get_session)):
+async def _read_resume(file: UploadFile) -> tuple[str, bytes]:
     data = await file.read()
     if not data:
-        return redirect("/profile", err="That file was empty")
+        raise ValueError("That file was empty.")
     try:
         text = resume.extract_text(file.filename or "resume.txt", data)
     except resume.ResumeError as exc:
-        return redirect("/profile", err=str(exc))
+        raise ValueError(str(exc)) from exc
     except Exception as exc:
-        return redirect("/profile", err=f"Could not read that file: {exc}")
+        raise ValueError(f"Couldn't read that file ({exc}). Try saving it as PDF or DOCX again.") from exc
     if len(text) < 50:
-        return redirect("/profile", err="Couldn't find text in that file. If it's a scanned PDF, upload a DOCX or TXT instead.")
-    upload_dir = get_settings().upload_dir
-    target = upload_dir / Path(file.filename or "resume").name
+        raise ValueError("Couldn't find any text in that file. If it's a scanned PDF, upload a DOCX or TXT version instead.")
+    return text, data
+
+
+@app.post("/profile/resume")
+async def resume_upload(
+    file: UploadFile = File(...), next: str = Form("/resume"), session: Session = Depends(get_session)
+):
+    back = _next(next, "/resume")
+    try:
+        text, data = await _read_resume(file)
+    except ValueError as exc:
+        return redirect(back.split("?")[0] if "step=" not in back else "/welcome", err=str(exc))
+    target = get_settings().upload_dir / Path(file.filename or "resume").name
     target.write_bytes(data)
     analysis = resume.analyze(text)
     profile = service.get_profile(session)
@@ -429,9 +451,11 @@ async def resume_upload(file: UploadFile = File(...), session: Session = Depends
     profile.resume_skills = analysis["skills"]
     profile.years_experience = analysis["years_experience"]
     service.rescore(session)
+    report = grader.grade_resume(text, analysis["years_experience"], service.skill_demand(session))
     return redirect(
-        "/profile",
-        msg=f"Resume parsed: {len(analysis['skills'])} skills, ~{analysis['years_experience']:g} years experience. All jobs re-scored.",
+        back,
+        msg=f"Resume read: {len(analysis['skills'])} skills, about {analysis['years_experience']:g} years of experience. "
+            f"Resume grade: {report.grade} ({report.score}/100).",
     )
 
 
@@ -448,7 +472,7 @@ def source_new(request: Request, kind: str, session: Session = Depends(get_sessi
     return render(request, "source_form.html", session, adapter=adapter, source=None, config={})
 
 
-@app.get("/sources/{source_id}/edit", response_class=HTMLResponse)
+@app.get("/sources/{source_id:int}/edit", response_class=HTMLResponse)
 def source_edit(source_id: int, request: Request, session: Session = Depends(get_session)):
     source = session.get(Source, source_id)
     if not source:
@@ -473,20 +497,22 @@ async def _config_from_form(request: Request, adapter, existing: dict) -> tuple[
 @app.post("/sources")
 async def source_create(request: Request, kind: str = Form(...), session: Session = Depends(get_session)):
     adapter = get_source(kind)
+    form = await request.form()
+    back = _next(form.get("next"), "/sources")
     try:
         name, config = await _config_from_form(request, adapter, {})
     except ValueError as exc:
-        return redirect(f"/sources/new?kind={kind}", err=str(exc))
+        return redirect(back if back != "/sources" else f"/sources/new?kind={kind}", err=str(exc))
     source = Source(kind=kind, name=name)
     source.config = config
     session.add(source)
     session.flush()
     session.commit()
     threading.Thread(target=_background_sync, args=([source.id],), daemon=True).start()
-    return redirect("/sources", msg=f"Connected {name}. Pulling jobs now.")
+    return redirect(back, msg=f"Connected {name}. Pulling in jobs now; they'll show up in a minute.")
 
 
-@app.post("/sources/{source_id}")
+@app.post("/sources/{source_id:int}")
 async def source_update(source_id: int, request: Request, session: Session = Depends(get_session)):
     source = session.get(Source, source_id)
     if not source:
@@ -500,7 +526,7 @@ async def source_update(source_id: int, request: Request, session: Session = Dep
     return redirect("/sources", msg="Saved")
 
 
-@app.post("/sources/{source_id}/toggle")
+@app.post("/sources/{source_id:int}/toggle")
 def source_toggle(source_id: int, session: Session = Depends(get_session)):
     source = session.get(Source, source_id)
     if source:
@@ -508,7 +534,7 @@ def source_toggle(source_id: int, session: Session = Depends(get_session)):
     return redirect("/sources")
 
 
-@app.post("/sources/{source_id}/delete")
+@app.post("/sources/{source_id:int}/delete")
 def source_delete(source_id: int, session: Session = Depends(get_session)):
     source = session.get(Source, source_id)
     if source:
@@ -516,7 +542,7 @@ def source_delete(source_id: int, session: Session = Depends(get_session)):
     return redirect("/sources", msg="Source removed. Jobs it found are kept.")
 
 
-@app.post("/sources/{source_id}/sync")
+@app.post("/sources/{source_id:int}/sync")
 def source_sync(source_id: int, session: Session = Depends(get_session)):
     if service.sync_running():
         return redirect("/sources", err="A sync is already running")
@@ -572,16 +598,17 @@ async def alert_create(request: Request, kind: str = Form(...), session: Session
     label, fields = notify.CHANNEL_FIELDS[kind]
     form = await request.form()
     config = {f.name: str(form.get(f.name, "")).strip() or f.default for f in fields}
+    back = _next(form.get("next"), "/alerts")
     missing = [f.label for f in fields if f.required and not config.get(f.name)]
     if missing:
-        return redirect("/alerts", err="Missing: " + ", ".join(missing))
+        return redirect(back, err="Missing: " + ", ".join(missing))
     channel = Channel(kind=kind, name=str(form.get("name") or label))
     channel.config = config
     session.add(channel)
-    return redirect("/alerts", msg=f"Added {channel.name}")
+    return redirect(back, msg=f"Added {channel.name}. Use Test to make sure it arrives.")
 
 
-@app.post("/alerts/{channel_id}/test")
+@app.post("/alerts/{channel_id:int}/test")
 def alert_test(channel_id: int, session: Session = Depends(get_session)):
     channel = session.get(Channel, channel_id)
     if not channel:
@@ -599,7 +626,7 @@ def alert_test(channel_id: int, session: Session = Depends(get_session)):
     return redirect("/alerts", msg="Test notification sent")
 
 
-@app.post("/alerts/{channel_id}/toggle")
+@app.post("/alerts/{channel_id:int}/toggle")
 def alert_toggle(channel_id: int, session: Session = Depends(get_session)):
     channel = session.get(Channel, channel_id)
     if channel:
@@ -607,7 +634,7 @@ def alert_toggle(channel_id: int, session: Session = Depends(get_session)):
     return redirect("/alerts")
 
 
-@app.post("/alerts/{channel_id}/delete")
+@app.post("/alerts/{channel_id:int}/delete")
 def alert_delete(channel_id: int, session: Session = Depends(get_session)):
     channel = session.get(Channel, channel_id)
     if channel:
@@ -643,7 +670,7 @@ def answer_save(
     return redirect("/answers", msg="Saved")
 
 
-@app.post("/answers/{answer_id}/delete")
+@app.post("/answers/{answer_id:int}/delete")
 def answer_delete(answer_id: int, session: Session = Depends(get_session)):
     record = session.get(Answer, answer_id)
     if record:
@@ -747,3 +774,143 @@ def api_queue(session: Session = Depends(get_session)):
 def api_lookup(url: str, session: Session = Depends(get_session)):
     job = _find_job_by_url(session, url)
     return {"job": _job_json(job) if job else None}
+
+
+TITLE_SUGGESTIONS = {
+    "python": ["Software Engineer", "Backend Engineer", "Data Engineer"],
+    "javascript": ["Frontend Engineer", "Full Stack Developer"],
+    "react": ["Frontend Engineer", "Full Stack Developer"],
+    "java": ["Software Engineer", "Backend Engineer"],
+    "sql": ["Data Analyst", "Business Analyst"],
+    "excel": ["Business Analyst", "Financial Analyst", "Operations Analyst"],
+    "tableau": ["Data Analyst", "Business Intelligence Analyst"],
+    "machine learning": ["Machine Learning Engineer", "Data Scientist"],
+    "statistics": ["Data Scientist", "Data Analyst"],
+    "aws": ["Cloud Engineer", "DevOps Engineer"],
+    "kubernetes": ["DevOps Engineer", "Site Reliability Engineer"],
+    "figma": ["Product Designer", "UX Designer"],
+    "ui/ux design": ["UX Designer", "Product Designer"],
+    "product management": ["Product Manager", "Associate Product Manager"],
+    "project management": ["Project Manager", "Program Coordinator"],
+    "seo": ["Marketing Coordinator", "Digital Marketing Specialist"],
+    "social media": ["Social Media Coordinator", "Marketing Coordinator"],
+    "content marketing": ["Content Marketing Specialist", "Marketing Coordinator"],
+    "sales": ["Sales Development Representative", "Account Executive"],
+    "accounting": ["Staff Accountant", "Accounting Analyst"],
+    "financial analysis": ["Financial Analyst", "FP&A Analyst"],
+    "human resources": ["HR Coordinator", "Recruiting Coordinator"],
+    "customer service": ["Customer Success Associate", "Customer Support Specialist"],
+    "cad": ["Mechanical Engineer", "Design Engineer"],
+    "lab skills": ["Research Assistant", "Lab Technician"],
+    "clinical": ["Clinical Research Coordinator", "Medical Assistant"],
+}
+FREE_SOURCES = [("remotive", "Remotive", {}), ("remoteok", "Remote OK", {}), ("themuse", "The Muse", {"pages": "2"})]
+WELCOME_STEPS = ["Resume", "What you want", "Where to look", "Alerts"]
+
+
+def _title_suggestions(profile) -> list[str]:
+    seen = []
+    for skill in profile.resume_skills or []:
+        for title in TITLE_SUGGESTIONS.get(skill, []):
+            if title not in seen and title not in (profile.target_titles or []):
+                seen.append(title)
+    return seen[:8]
+
+
+@app.get("/welcome", response_class=HTMLResponse)
+def welcome(request: Request, step: int = 1, session: Session = Depends(get_session)):
+    profile = service.get_profile(session)
+    step = max(1, min(len(WELCOME_STEPS), step))
+    sources = list(session.scalars(select(Source).order_by(Source.created_at)))
+    channels = list(session.scalars(select(Channel)))
+    return render(
+        request, "welcome.html", session,
+        step=step, steps=WELCOME_STEPS, levels=EXPERIENCE_LEVELS, suggestions=_title_suggestions(profile),
+        sources=sources, channels=channels, registry=REGISTRY, channel_fields=notify.CHANNEL_FIELDS,
+        free_connected={s.kind for s in sources} >= {k for k, _, _ in FREE_SOURCES},
+        ntfy_topic="jobradar-" + secrets.token_hex(4),
+        report=grader.grade_resume(profile.resume_text, profile.years_experience) if profile.resume_text else None,
+    )
+
+
+@app.post("/welcome/finish")
+def welcome_finish(session: Session = Depends(get_session)):
+    profile = service.get_profile(session)
+    profile.onboarded = True
+    has_sources = session.scalar(select(func.count(Source.id)))
+    session.commit()
+    if has_sources:
+        if not service.sync_running():
+            threading.Thread(target=_background_sync, daemon=True).start()
+        return redirect("/", msg="You're set up. Checking your job sites now; matches will appear here in a minute.")
+    return redirect("/", msg="You're set up. Connect a job site any time from Settings → Job sites.")
+
+
+@app.post("/sources/quick-add")
+def sources_quick_add(request: Request, next: str = Form("/sources"), session: Session = Depends(get_session)):
+    existing = {kind for (kind,) in session.execute(select(Source.kind))}
+    added = []
+    for kind, name, config in FREE_SOURCES:
+        if kind in existing:
+            continue
+        source = Source(kind=kind, name=name)
+        source.config = config
+        session.add(source)
+        added.append(name)
+    session.commit()
+    if added:
+        threading.Thread(target=_background_sync, daemon=True).start()
+    message = f"Added {', '.join(added)}." if added else "Those free sources are already connected."
+    return redirect(_next(next, "/sources"), msg=message)
+
+
+def _fit_jobs(session: Session) -> list[Job]:
+    return list(session.scalars(
+        select(Job).where(Job.description != "", Job.status != "dismissed").order_by(Job.score.desc()).limit(40)
+    ))
+
+
+@app.get("/resume", response_class=HTMLResponse)
+def resume_page(request: Request, job: int = 0, session: Session = Depends(get_session)):
+    profile = service.get_profile(session)
+    demand = service.skill_demand(session)
+    report = grader.grade_resume(profile.resume_text, profile.years_experience, demand) if profile.resume_text else None
+    fit_job = session.get(Job, job) if job else None
+    fit = grader.job_fit(profile.resume_text, fit_job.title, fit_job.description) if fit_job and profile.resume_text else None
+    return render(
+        request, "resume.html", session,
+        report=report, demand=demand, fit=fit, fit_job=fit_job, fit_jobs=_fit_jobs(session), draft=False,
+    )
+
+
+@app.post("/resume/grade", response_class=HTMLResponse)
+async def resume_grade(
+    request: Request,
+    file: UploadFile | None = File(None),
+    text: str = Form(""),
+    job_text: str = Form(""),
+    job_title: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    profile = service.get_profile(session)
+    draft = False
+    resume_text = profile.resume_text
+    if file is not None and file.filename:
+        try:
+            resume_text, _ = await _read_resume(file)
+        except ValueError as exc:
+            return redirect("/resume", err=str(exc))
+        draft = True
+    elif text.strip():
+        resume_text, draft = text, True
+    if not resume_text:
+        return redirect("/resume", err="Upload a resume first.")
+    demand = service.skill_demand(session)
+    years = resume.estimate_years_experience(resume_text) if draft else profile.years_experience
+    report = grader.grade_resume(resume_text, years, demand)
+    fit = grader.job_fit(resume_text, job_title or "this role", job_text) if job_text.strip() else None
+    fit_job = Job(title=job_title or "Pasted job description", company="") if fit else None
+    return render(
+        request, "resume.html", session,
+        report=report, demand=demand, fit=fit, fit_job=fit_job, fit_jobs=_fit_jobs(session), draft=draft,
+    )

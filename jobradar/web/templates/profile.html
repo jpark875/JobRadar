@@ -1,30 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Profile{% endblock %}
 {% block content %}
-<h1>Profile</h1>
+<div class="page-head">
+  <h1>Profile &amp; preferences</h1>
+  <a class="btn small ghost" href="/welcome">Run the setup guide again</a>
+</div>
 <div class="grid2">
   <div>
-    <section class="card" id="resume">
-      <h2>Resume</h2>
-      <form method="post" action="/profile/resume" enctype="multipart/form-data" class="upload">
-        <input type="file" name="file" accept=".pdf,.docx,.txt,.md" required>
-        <button class="btn small">Upload and analyze</button>
-      </form>
-      {% if profile.resume_filename %}<p class="muted small">Current: {{ profile.resume_filename }}</p>{% endif %}
-      <form method="post" action="/profile" class="stack">
-        <input type="hidden" name="section" value="resume">
-        <label>Skills found <span class="hint">Comma separated. Add anything the parser missed; these drive the match score.</span>
-          <textarea name="resume_skills" rows="4">{{ (profile.resume_skills or [])|join(', ') }}</textarea>
-        </label>
-        <label>Years of experience <input type="number" step="0.5" min="0" name="years_experience" value="{{ profile.years_experience }}"></label>
-        <details>
-          <summary>Extracted resume text</summary>
-          <textarea name="resume_text_preview" rows="10" readonly>{{ profile.resume_text }}</textarea>
-        </details>
-        <button class="btn small">Save and re-score</button>
-      </form>
-    </section>
-
     <section class="card" id="preferences">
       <h2>What you're looking for</h2>
       <form method="post" action="/profile" class="stack">
@@ -60,17 +42,17 @@
     </section>
 
     <section class="card" id="schedule">
-      <h2>Pace and alerts</h2>
+      <h2>Daily goal and alerts</h2>
       <form method="post" action="/profile" class="stack">
         <input type="hidden" name="section" value="schedule">
         <div class="row-fields">
           <label>Daily application goal <input type="number" name="daily_goal" min="1" max="200" value="{{ profile.daily_goal }}"></label>
-          <label>Alert me at score ≥ <input type="number" name="alert_threshold" min="0" max="100" value="{{ profile.alert_threshold }}"></label>
+          <label>Notify me about jobs scoring at least <span class="hint">0-100. 60 is a good start.</span><input type="number" name="alert_threshold" min="0" max="100" value="{{ profile.alert_threshold }}"></label>
         </div>
         <div class="row-fields">
-          <label>Check for jobs every (minutes) <input type="number" name="sync_interval_minutes" min="10" max="1440" value="{{ profile.sync_interval_minutes }}"></label>
-          <label>Daily digest hour (0-23, -1 off) <input type="number" name="digest_hour" min="-1" max="23" value="{{ profile.digest_hour }}"></label>
-          <label>Follow up after (days) <input type="number" name="follow_up_days" min="1" max="60" value="{{ profile.follow_up_days }}"></label>
+          <label>Check for new jobs every (minutes) <input type="number" name="sync_interval_minutes" min="10" max="1440" value="{{ profile.sync_interval_minutes }}"></label>
+          <label>Daily digest at hour <span class="hint">0-23, or -1 to turn off</span> <input type="number" name="digest_hour" min="-1" max="23" value="{{ profile.digest_hour }}"></label>
+          <label>Remind me to follow up after (days) <input type="number" name="follow_up_days" min="1" max="60" value="{{ profile.follow_up_days }}"></label>
         </div>
         <button class="btn small">Save</button>
       </form>
@@ -80,7 +62,7 @@
   <div>
     <section class="card" id="personal">
       <h2>Application details</h2>
-      <p class="muted small">Used by the browser extension to autofill application forms and by your templates.</p>
+      <p class="muted small">The browser extension types these into application forms for you, and your cover letter uses them.</p>
       <form method="post" action="/profile" class="stack">
         <input type="hidden" name="section" value="personal">
         <label>Full name <input name="full_name" value="{{ profile.full_name }}"></label>
@@ -110,20 +92,6 @@
       </form>
     </section>
 
-    <section class="card" id="templates">
-      <h2>Cover letter template</h2>
-      <form method="post" action="/profile" class="stack">
-        <input type="hidden" name="section" value="templates">
-        <label>Highlight paragraph <span class="hint">Your strongest accomplishment. Inserted where {highlight} appears.</span>
-          <textarea name="resume_highlight" rows="3">{{ profile.resume_highlight }}</textarea>
-        </label>
-        <label>Template
-          <textarea name="cover_letter_template" rows="14">{{ profile.cover_letter_template }}</textarea>
-        </label>
-        <p class="muted small">Placeholders: {% for p in placeholders %}<code>{{ '{' ~ p ~ '}' }}</code> {% endfor %}</p>
-        <button class="btn small">Save</button>
-      </form>
-    </section>
   </div>
 </div>
 {% endblock %}

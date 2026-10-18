@@ -16,18 +16,23 @@
 </div>
 
 <div class="toolbar">
-  {% if job.link %}<a class="btn" href="{{ job.link }}" target="_blank" rel="noopener" data-open-apply="{{ job.id }}">Open application</a>{% endif %}
-  {% for s, label in [("applied", "Mark applied"), ("queued", "Add to queue"), ("saved", "Save"), ("interviewing", "Interviewing"), ("offer", "Offer"), ("rejected", "Rejected"), ("dismissed", "Dismiss")] %}
-    {% if job.status != s %}
-    <form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="{{ s }}"><button class="btn {{ 'ghost' if s != 'applied' }} {{ 'danger' if s == 'dismissed' }}">{{ label }}</button></form>
-    {% endif %}
-  {% endfor %}
+  {% if job.link %}<a class="btn" href="{{ job.link }}" target="_blank" rel="noopener" data-open-apply="{{ job.id }}">Open application ↗</a>{% endif %}
+  {% if job.status != 'applied' %}<form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="applied"><button class="btn ghost">Mark applied</button></form>{% endif %}
+  {% if job.status in ('new', 'saved') %}<form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="queued"><button class="btn ghost">Add to today's queue</button></form>{% endif %}
+  <form method="post" action="/jobs/{{ job.id }}/status">
+    <select name="status" data-autosubmit aria-label="Change status">
+      <option value="">Move to…</option>
+      {% for s, label in [("saved", "Saved for later"), ("interviewing", "Interviewing"), ("offer", "Offer"), ("rejected", "Rejected"), ("dismissed", "Not interested"), ("new", "Back to new")] if s != job.status %}
+      <option value="{{ s }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
 </div>
 
 <div class="grid2 detail">
   <div>
     <section class="card">
-      <h2>Why this score</h2>
+      <h2>Why it scored {{ job.score|round|int }}</h2>
       {% if d.filtered_reason %}<p class="warn">Hidden by your filters: {{ d.filtered_reason }}</p>{% endif %}
       <ul class="reasons">
         {% for r in d.reasons or [] %}<li class="good">{{ r }}</li>{% endfor %}
@@ -35,16 +40,25 @@
       </ul>
       <table class="components">
         {% for name, value in (d.components or {}).items() %}
-        <tr><td>{{ name|capitalize }}</td><td>{% if value is not none %}<div class="bar"><i style="width: {{ (value * 100)|round|int }}%"></i></div>{% else %}<span class="muted small">not enough info</span>{% endif %}</td></tr>
+        <tr><td>{{ {"skills": "Skills match", "title": "Title match", "text": "Resume similarity", "level": "Seniority fit", "location": "Location", "recency": "How recent"}.get(name, name|capitalize) }}</td><td>{% if value is not none %}<div class="bar"><i style="width: {{ (value * 100)|round|int }}%"></i></div>{% else %}<span class="muted small">not enough info</span>{% endif %}</td></tr>
         {% endfor %}
       </table>
       {% if d.matched_skills %}<h3>Skills you have</h3><div class="chips">{% for s in d.matched_skills %}<span class="chip good">{{ s }}</span>{% endfor %}</div>{% endif %}
       {% if d.missing_skills %}
         <h3>In the posting but not on your resume</h3>
         <div class="chips">{% for s in d.missing_skills %}<span class="chip miss">{{ s }}</span>{% endfor %}</div>
-        <p class="muted small">If you do have these, add them to your resume (and your skills on the Profile page) before applying. Many screeners match on exact keywords.</p>
+        <p class="muted small">If you do have these, add them to your resume (and to your skills on the <a href="/resume">Resume</a> page) before applying. Many screeners match on exact keywords.</p>
       {% endif %}
     </section>
+
+    {% if fit %}
+    <section class="card">
+      <div class="card-head"><h2>Tailor your resume</h2><a class="small" href="/resume?job={{ job.id }}#fit">Open in resume grader</a></div>
+      <p class="muted small">Your resume covers about <b>{{ fit.score }}%</b> of what this posting asks for.</p>
+      {% if fit.missing_keywords %}<div class="chips"><span class="muted small">Words they use that you don't:</span>{% for k in fit.missing_keywords[:8] %}<span class="chip">{{ k }}</span>{% endfor %}</div>{% endif %}
+      {% for tip in (fit.tips[1:] if fit.missing_skills else fit.tips) %}<p class="tip">{{ tip }}</p>{% endfor %}
+    </section>
+    {% endif %}
 
     <section class="card">
       <div class="card-head">
@@ -55,7 +69,7 @@
         </div>
       </div>
       <textarea id="cover" rows="14">{{ cover_letter }}</textarea>
-      <p class="muted small">Generated from your template on the <a href="/profile#templates">Profile</a> page. Edit here before copying; changes aren't saved.</p>
+      <p class="muted small">Generated from your template under <a href="/answers#templates">Settings → Answers &amp; cover letter</a>.{% if not profile.full_name %} <b>Add your name and contact details in <a href="/profile#personal">Settings → Profile</a> to sign it.</b>{% endif %} Edit here before copying; changes aren't saved.</p>
     </section>
 
     <section class="card">

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from "_macros.html" import grade_badge, dropzone %}
+{% block title %}Resume{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Resume</h1>
+  {% if profile.resume_text %}
+  <div class="actions">
+    <details class="popover">
+      <summary class="btn small ghost">Upload a new version</summary>
+      <div class="popover-body">{{ dropzone('/resume', 'Replace your resume') }}</div>
+    </details>
+    <details class="popover">
+      <summary class="btn small ghost">Grade a draft</summary>
+      <div class="popover-body">
+        <form method="post" action="/resume/grade" enctype="multipart/form-data" class="stack">
+          <p class="muted small">Try out an edited version without replacing your saved resume.</p>
+          <input type="file" name="file" accept=".pdf,.docx,.txt,.md">
+          <span class="muted small">or paste the text</span>
+          <textarea name="text" rows="5"></textarea>
+          <button class="btn small">Grade draft</button>
+        </form>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+</div>
+
+{% if not report %}
+<section class="card wizard-card">
+  <h2>Upload your resume to get it graded</h2>
+  <p class="muted">You'll get a score out of 100 with specific fixes: missing sections, bullets without measurable results, weak verbs, filler words, skills employers are asking for, and how well it matches any job you pick.</p>
+  {{ dropzone('/resume') }}
+</section>
+{% else %}
+
+{% if draft %}<div class="flash warn-flash">You're looking at a draft. It isn't saved; use "Upload a new version" to make it your resume.</div>{% endif %}
+
+<section class="card grade-card">
+  {{ grade_badge(report, 'xl') }}
+  <div class="grade-main">
+    <div class="grade-score"><b>{{ report.score }}</b><span class="muted">/100</span></div>
+    <p class="grade-headline">{{ report.headline }}</p>
+    <div class="muted small">{{ report.stats.words }} words · {{ report.stats.bullets }} bullet points · {{ report.stats.skills }} skills{% if not draft %} · {{ profile.resume_filename }}{% endif %}</div>
+  </div>
+  <div class="grade-bars">
+    {% for c in report.checks %}
+    <div class="grade-bar" title="{{ c.summary }}">
+      <span>{{ c.title }}</span>
+      <div class="bar"><i class="b-{{ c.status }}" style="width: {{ (c.score * 100)|round|int }}%"></i></div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="grid2">
+  <div>
+    <section class="card">
+      <h2>{% if report.fixes %}What to fix, most important first{% else %}Nothing major to fix{% endif %}</h2>
+      {% for c in report.fixes %}
+      <div class="fix fix-{{ c.status }}">
+        <div class="fix-head"><span class="dot"></span><b>{{ c.title }}</b><span class="muted small">+{{ (c.weight * (1 - c.score))|round|int }} pts possible</span></div>
+        <p>{{ c.summary }}</p>
+        {% for tip in c.tips %}<p class="tip">{{ tip }}</p>{% endfor %}
+        {% if c.examples %}
+        <details><summary>Show examples from your resume</summary>
+          <ul class="examples">{% for e in c.examples %}<li>{{ e }}</li>{% endfor %}</ul>
+        </details>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="muted">Every check passed. Next step: tailor it to each job using the tool on the right.</p>
+      {% endfor %}
+      {% set passed = report.checks|selectattr('status', 'equalto', 'pass')|list %}
+      {% if passed %}
+      <details class="passed"><summary>{{ passed|length }} check{{ 's' if passed|length != 1 }} passed</summary>
+        <ul>{% for c in passed %}<li><b>{{ c.title }}:</b> {{ c.summary }}</li>{% endfor %}</ul>
+      </details>
+      {% endif %}
+    </section>
+  </div>
+
+  <div>
+    <section class="card" id="fit">
+      <h2>Match it to a job</h2>
+      <p class="muted small">See which skills and keywords a specific posting wants that your resume doesn't mention.</p>
+      {% if fit_jobs %}
+      <form method="get" action="/resume#fit" class="inline-form">
+        <select name="job" data-autosubmit>
+          <option value="">Pick one of your jobs…</option>
+          {% for j in fit_jobs %}<option value="{{ j.id }}" {{ 'selected' if fit_job and fit_job.id == j.id }}>{{ j.title }} · {{ j.company }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      <details {{ 'open' if not fit_jobs }}>
+        <summary class="small">Paste a job description instead</summary>
+        <form method="post" action="/resume/grade#fit" class="stack">
+          <input name="job_title" placeholder="Job title">
+          <textarea name="job_text" rows="6" placeholder="Paste the full job description" required></textarea>
+          <button class="btn small">Check match</button>
+        </form>
+      </details>
+      {% if fit %}
+      <div class="fit">
+        <div class="fit-head">
+          <span class="score {{ fit.score|score_class }}">{{ fit.score }}</span>
+          <div><b>{{ fit_job.title }}</b>{% if fit_job.company %} <span class="muted">at {{ fit_job.company }}</span>{% endif %}<div class="muted small">keyword match</div></div>
+        </div>
+        {% if fit.matched_skills %}<h3>You have</h3><div class="chips">{% for s in fit.matched_skills %}<span class="chip good">{{ s }}</span>{% endfor %}</div>{% endif %}
+        {% if fit.missing_skills %}<h3>They want, not on your resume</h3><div class="chips">{% for s in fit.missing_skills %}<span class="chip miss">{{ s }}</span>{% endfor %}</div>{% endif %}
+        {% if fit.missing_keywords %}<h3>Words they repeat that you don't use</h3><div class="chips">{% for s in fit.missing_keywords %}<span class="chip">{{ s }}</span>{% endfor %}</div>{% endif %}
+        {% for tip in fit.tips %}<p class="tip">{{ tip }}</p>{% endfor %}
+        {% if fit_job.id %}<a class="small" href="/jobs/{{ fit_job.id }}">Open this job →</a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Skills employers are asking for</h2>
+      {% if demand %}
+      <p class="muted small">How often each skill appears in the jobs JobRadar has found for you.</p>
+      <table class="demand">
+        {% for d in demand %}
+        <tr class="{{ 'have' if d.skill in report.skills else 'need' }}">
+          <td>{{ d.skill }}</td>
+          <td><div class="bar"><i style="width: {{ d.share }}%"></i></div></td>
+          <td class="muted small">{{ d.share }}%</td>
+          <td>{% if d.skill in report.skills %}<span class="chip good">on resume</span>{% else %}<span class="chip miss">missing</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="muted">Once JobRadar has found some jobs, this shows which skills come up most so you know what to highlight.</p>
+      {% endif %}
+    </section>
+
+    {% if not draft %}
+    <section class="card">
+      <h2>Skills JobRadar matches on</h2>
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="resume">
+        <input type="hidden" name="next" value="/resume">
+        <label>Skills <span class="hint">Comma separated. Add anything the parser missed; these drive your match scores.</span>
+          <textarea name="resume_skills" rows="4">{{ (profile.resume_skills or [])|join(', ') }}</textarea>
+        </label>
+        <label>Years of experience <input type="number" step="0.5" min="0" name="years_experience" value="{{ profile.years_experience }}"></label>
+        <button class="btn small">Save</button>
+      </form>
+      <details><summary class="small">Text JobRadar read from your file</summary><pre class="extracted">{{ profile.resume_text }}</pre></details>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

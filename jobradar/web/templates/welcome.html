@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field_inputs, grade_badge, dropzone %}
+{% block title %}Get started{% endblock %}
+{% block content %}
+<div class="wizard">
+  <ol class="stepper">
+    {% for name in steps %}
+    <li class="{{ 'current' if loop.index == step else 'done' if loop.index < step }}">
+      <a href="/welcome?step={{ loop.index }}"><span>{{ loop.index }}</span>{{ name }}</a>
+    </li>
+    {% endfor %}
+  </ol>
+
+  {% if step == 1 %}
+  <section class="card wizard-card">
+    <h1>Start with your resume</h1>
+    <p class="muted">JobRadar reads your skills and experience from it, uses them to rank every job it finds, and grades the resume itself so you know what to improve. Nothing leaves your computer.</p>
+    {% if profile.resume_text %}
+    <div class="resume-summary">
+      {{ grade_badge(report, 'large') }}
+      <div>
+        <b>{{ profile.resume_filename }}</b>
+        <div class="muted small">{{ profile.resume_skills|length }} skills found · about {{ profile.years_experience|round(1) }} years of experience · resume score {{ report.score }}/100</div>
+        <div class="chips">{% for s in (profile.resume_skills or [])[:12] %}<span class="chip good">{{ s }}</span>{% endfor %}</div>
+      </div>
+    </div>
+    <div class="wizard-actions">
+      <a class="btn" href="/welcome?step=2">Continue</a>
+      <a class="btn ghost" href="/resume" target="_blank">See full resume report</a>
+    </div>
+    <details class="replace"><summary>Use a different file</summary>{{ dropzone('/welcome?step=2') }}</details>
+    {% else %}
+    {{ dropzone('/welcome?step=2') }}
+    <div class="wizard-actions"><a class="muted small" href="/welcome?step=2">Skip for now</a></div>
+    {% endif %}
+  </section>
+
+  {% elif step == 2 %}
+  <section class="card wizard-card">
+    <h1>What are you looking for?</h1>
+    <p class="muted">This decides which jobs JobRadar searches for and how it ranks them. You can change it later in Settings.</p>
+    <form method="post" action="/profile" class="stack">
+      <input type="hidden" name="section" value="preferences">
+      <input type="hidden" name="next" value="/welcome?step=3">
+      <label>Job titles you want <span class="hint">One per line</span>
+        <textarea id="titles" name="target_titles" rows="3" placeholder="Software Engineer&#10;Data Analyst" required>{{ (profile.target_titles or [])|join('\n') }}</textarea>
+      </label>
+      {% if suggestions %}
+      <div class="chips"><span class="muted small">Based on your resume:</span>
+        {% for t in suggestions %}<button type="button" class="chip pick" data-add-to="#titles" data-value="{{ t }}">+ {{ t }}</button>{% endfor %}
+      </div>
+      {% endif %}
+      <label>Where? <span class="hint">Cities, one per line. Leave blank for anywhere.</span>
+        <textarea name="locations" rows="2" placeholder="New York&#10;Austin, TX">{{ (profile.locations or [])|join('\n') }}</textarea>
+      </label>
+      <div class="row-fields">
+        <label class="inline"><input type="checkbox" name="remote_ok" {{ 'checked' if profile.remote_ok }}> Remote jobs are fine</label>
+        <label class="inline"><input type="checkbox" name="remote_only" {{ 'checked' if profile.remote_only }}> Only show remote jobs</label>
+      </div>
+      <fieldset class="choice">
+        <legend>Experience level</legend>
+        {% for value, label, hint in [("intern", "Internship", "Still in school"), ("entry", "Entry level", "0-2 years"), ("mid", "Mid level", "2-5 years"), ("senior", "Senior", "5+ years"), ("lead", "Lead / manager", "Leading teams")] %}
+        <label class="choice-card"><input type="radio" name="experience_level" value="{{ value }}" {{ 'checked' if profile.experience_level == value }}><b>{{ label }}</b><span class="muted small">{{ hint }}</span></label>
+        {% endfor %}
+      </fieldset>
+      <div class="row-fields">
+        <label>Minimum salary <span class="hint">Optional, per year in USD</span><input type="number" name="min_salary" min="0" step="1000" value="{{ profile.min_salary or '' }}" placeholder="e.g. 70000"></label>
+        <label>Applications per day goal <span class="hint">Your daily queue fills to this</span><input type="number" name="daily_goal" min="1" max="200" value="{{ profile.daily_goal }}"></label>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn">Save and continue</button>
+        <a class="btn ghost" href="/welcome?step=1">Back</a>
+      </div>
+    </form>
+  </section>
+
+  {% elif step == 3 %}
+  <section class="card wizard-card">
+    <h1>Where should JobRadar look?</h1>
+    <p class="muted">Connect as many as you like. Each one is checked automatically every {{ profile.sync_interval_minutes }} minutes.</p>
+    {% if sources %}
+    <div class="connected">
+      {% for s in sources %}<span class="chip good">✓ {{ s.name }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="option">
+      <div class="option-head">
+        <div><b>Free job boards</b><div class="muted small">Remotive, Remote OK and The Muse. Nothing to set up.</div></div>
+        {% if free_connected %}<span class="chip good">Connected</span>{% else %}
+        <form method="post" action="/sources/quick-add"><input type="hidden" name="next" value="/welcome?step=3"><button class="btn small">Add all three</button></form>
+        {% endif %}
+      </div>
+    </div>
+
+    {% set careers = registry['careers'] %}
+    <details class="option">
+      <summary class="option-head">
+        <div><b>Companies you'd like to work for</b><div class="muted small">Paste their careers page links. Covers most startups and tech companies. No account needed.</div></div>
+        <span class="btn small ghost">Set up</span>
+      </summary>
+      <form method="post" action="/sources" class="stack">
+        <input type="hidden" name="kind" value="careers">
+        <input type="hidden" name="next" value="/welcome?step=3">
+        {{ field_inputs(careers.fields) }}
+        <button class="btn small">Connect</button>
+      </form>
+    </details>
+
+    {% set email = registry['email'] %}
+    <details class="option">
+      <summary class="option-head">
+        <div><b>Indeed, LinkedIn and Handshake</b><div class="muted small">These sites don't let apps sign in for you, so JobRadar reads the job alert emails they send you.</div></div>
+        <span class="btn small ghost">Set up</span>
+      </summary>
+      <ol class="small how">
+        <li>On each site, search for your role and turn on email alerts (Indeed: "Get new jobs by email", LinkedIn: "Set alert", Handshake: "Save search").</li>
+        <li>For Gmail, create an app password at <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a> (needs 2-step verification).</li>
+        <li>Enter it below. JobRadar only reads emails from job sites, never sends or deletes anything.</li>
+      </ol>
+      <form method="post" action="/sources" class="stack">
+        <input type="hidden" name="kind" value="email">
+        <input type="hidden" name="next" value="/welcome?step=3">
+        {{ field_inputs(email.fields) }}
+        <button class="btn small">Connect inbox</button>
+      </form>
+    </details>
+
+    {% set jsearch = registry['jsearch'] %}
+    <details class="option">
+      <summary class="option-head">
+        <div><b>Search Indeed &amp; LinkedIn directly</b><div class="muted small">Full job descriptions, so match scores are more accurate. Needs a free RapidAPI key.</div></div>
+        <span class="btn small ghost">Set up</span>
+      </summary>
+      <p class="small">Sign up at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com</a>, subscribe to the free JSearch plan, and copy your key.</p>
+      <form method="post" action="/sources" class="stack">
+        <input type="hidden" name="kind" value="jsearch">
+        <input type="hidden" name="next" value="/welcome?step=3">
+        {{ field_inputs(jsearch.fields) }}
+        <button class="btn small">Connect</button>
+      </form>
+    </details>
+
+    <p class="muted small">More options (Adzuna, Jooble, USAJOBS) are under Settings → Job sites.</p>
+    <div class="wizard-actions">
+      <a class="btn" href="/welcome?step=4">Continue</a>
+      <a class="btn ghost" href="/welcome?step=2">Back</a>
+    </div>
+  </section>
+
+  {% else %}
+  <section class="card wizard-card">
+    <h1>Get alerted about great matches</h1>
+    <p class="muted">When a new posting scores {{ profile.alert_threshold }}+ you get one notification, plus a daily digest at {{ '%d:00'|format(profile.digest_hour) if profile.digest_hour >= 0 else 'a set time' }}.</p>
+    {% if channels %}<div class="connected">{% for c in channels %}<span class="chip good">✓ {{ c.name }}</span>{% endfor %}</div>{% endif %}
+
+    <details class="option" open>
+      <summary class="option-head">
+        <div><b>Push notifications on your phone</b><div class="muted small">Free, using the ntfy app. No account needed.</div></div>
+      </summary>
+      <ol class="small how">
+        <li>Install <b>ntfy</b> from the App Store or Google Play.</li>
+        <li>Tap <b>+</b> and subscribe to the topic <code>{{ ntfy_topic }}</code>.</li>
+        <li>Click below, then send a test from Settings → Notifications.</li>
+      </ol>
+      <form method="post" action="/alerts" class="stack">
+        <input type="hidden" name="kind" value="ntfy">
+        <input type="hidden" name="name" value="Phone (ntfy)">
+        <input type="hidden" name="topic" value="{{ ntfy_topic }}">
+        <input type="hidden" name="next" value="/welcome?step=4">
+        <button class="btn small">Add phone notifications</button>
+      </form>
+    </details>
+
+    <details class="option">
+      <summary class="option-head">
+        <div><b>Email</b><div class="muted small">Sent from your own email account.</div></div>
+        <span class="btn small ghost">Set up</span>
+      </summary>
+      <form method="post" action="/alerts" class="stack">
+        <input type="hidden" name="kind" value="email">
+        <input type="hidden" name="name" value="Email">
+        <input type="hidden" name="next" value="/welcome?step=4">
+        {{ field_inputs(channel_fields['email'][1]) }}
+        <button class="btn small">Add email alerts</button>
+      </form>
+    </details>
+    <p class="muted small">Discord, Slack and webhooks are under Settings → Notifications.</p>
+
+    <form method="post" action="/welcome/finish" class="wizard-actions">
+      <button class="btn">Finish and find jobs</button>
+      <a class="btn ghost" href="/welcome?step=3">Back</a>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

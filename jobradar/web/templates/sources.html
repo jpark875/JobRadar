@@ -1,30 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Connections{% endblock %}
+{% block title %}Job sites{% endblock %}
+{% macro tile(kind, adapter) -%}
+<a class="source-tile" href="/sources/new?kind={{ kind }}">
+  <b>{{ adapter.label }}</b>
+  <span class="small">{{ adapter.covers }}</span>
+  <span class="muted small">You'll need: {{ adapter.needs[:1]|lower }}{{ adapter.needs[1:] }}</span>
+</a>
+{%- endmacro %}
 {% block content %}
-<h1>Connections</h1>
+<h1>Job sites</h1>
 
 {% if sources %}
 <section class="card">
   <h2>Connected</h2>
   <table class="table">
-    <thead><tr><th>Name</th><th>Type</th><th>Jobs</th><th>Last sync</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Jobs found</th><th>Last checked</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for s in sources %}
       <tr class="{{ 'disabled' if not s.enabled }}">
-        <td><a href="/sources/{{ s.id }}/edit">{{ s.name }}</a></td>
-        <td>{{ registry[s.kind].label if s.kind in registry else s.kind }}</td>
+        <td><a href="/sources/{{ s.id }}/edit">{{ s.name }}</a><div class="muted small">{{ registry[s.kind].label if s.kind in registry else s.kind }}</div></td>
         <td>{{ counts.get(s.id, 0) }}</td>
-        <td>{{ s.last_synced_at|timeago or 'never' }}</td>
+        <td>{{ s.last_synced_at|timeago or 'not yet' }}</td>
         <td>
           {% if not s.enabled %}<span class="status">paused</span>
-          {% elif s.last_status == 'ok' %}<span class="status s-applied">ok · {{ s.last_count }} found</span>
-          {% elif s.last_status == 'error' %}<span class="status s-rejected" title="{{ s.last_error }}">error</span><div class="small warn">{{ s.last_error }}</div>
-          {% else %}<span class="status">pending</span>{% endif %}
+          {% elif s.last_status == 'ok' %}<span class="status s-applied">working</span>
+          {% elif s.last_status == 'error' %}<span class="status s-rejected">problem</span><div class="small warn">{{ s.last_error }}</div>
+          {% else %}<span class="status">waiting</span>{% endif %}
         </td>
         <td class="actions">
-          <form method="post" action="/sources/{{ s.id }}/sync"><button class="btn tiny">Sync</button></form>
+          <form method="post" action="/sources/{{ s.id }}/sync"><button class="btn tiny" title="Check this site now">Check now</button></form>
+          <a class="btn tiny ghost" href="/sources/{{ s.id }}/edit">Edit</a>
           <form method="post" action="/sources/{{ s.id }}/toggle"><button class="btn tiny ghost">{{ 'Pause' if s.enabled else 'Resume' }}</button></form>
-          <form method="post" action="/sources/{{ s.id }}/delete" data-confirm="Remove {{ s.name }}?"><button class="btn tiny ghost danger">Remove</button></form>
+          <form method="post" action="/sources/{{ s.id }}/delete" data-confirm="Remove {{ s.name }}? Jobs it already found are kept."><button class="btn tiny ghost danger">Remove</button></form>
         </td>
       </tr>
     {% endfor %}
@@ -33,20 +40,36 @@
 </section>
 {% endif %}
 
-<h2>Add a connection</h2>
-<p class="muted">Indeed, LinkedIn, Handshake and Glassdoor don't offer public APIs for job seekers and block automated logins, so JobRadar connects to them the two reliable ways: by reading the job alert emails those sites send you, and through job search APIs that index their listings. Company career pages (Greenhouse, Lever, Ashby, SmartRecruiters) are pulled directly.</p>
+<h2>Recommended</h2>
 <div class="source-grid">
-  {% for kind, adapter in registry.items() %}
-  <a class="source-tile" href="/sources/new?kind={{ kind }}">
-    <b>{{ adapter.label }}</b>
-    <span class="small">{{ adapter.covers }}</span>
-    <span class="muted small">{{ adapter.description }}</span>
-  </a>
-  {% endfor %}
+  {% for kind, adapter in registry.items() if adapter.tier == 'recommended' %}{{ tile(kind, adapter) }}{% endfor %}
+</div>
+
+<div class="card-head">
+  <h2>Free, nothing to set up</h2>
+  <form method="post" action="/sources/quick-add"><button class="btn small">Add all of these</button></form>
+</div>
+<div class="source-grid">
+  {% for kind, adapter in registry.items() if adapter.tier == 'free' %}{{ tile(kind, adapter) }}{% endfor %}
+</div>
+
+<h2>More sources</h2>
+<div class="source-grid">
+  {% for kind, adapter in registry.items() if adapter.tier == 'more' %}{{ tile(kind, adapter) }}{% endfor %}
   <a class="source-tile" href="/import">
-    <b>Paste or upload an alert email</b>
-    <span class="small">Any job alert email, without connecting your inbox</span>
-    <span class="muted small">Forward-and-forget alternative to the IMAP connection.</span>
+    <b>Import one alert email</b>
+    <span class="small">Paste or upload a job alert email from any site</span>
+    <span class="muted small">You'll need: nothing</span>
   </a>
 </div>
+
+<details class="advanced">
+  <summary class="muted">Advanced: connect a single job platform</summary>
+  <p class="muted small">"Company career pages" above already handles these. Use these only if you want them listed separately.</p>
+  <div class="source-grid">
+    {% for kind, adapter in registry.items() if adapter.tier == 'advanced' %}{{ tile(kind, adapter) }}{% endfor %}
+  </div>
+</details>
+
+<p class="muted small why">Why no Indeed or LinkedIn password? Those sites don't offer a way for apps to sign in for you, and automated logins get accounts locked. Their job alert emails and the JSearch API get you the same listings safely.</p>
 {% endblock %}

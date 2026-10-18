@@ -5,24 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}JobRadar{% endblock %} · JobRadar</title>
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
-  {% if syncing %}<meta http-equiv="refresh" content="8">{% endif %}
+  {% if syncing and nav in ('/', '/jobs', '/sources') %}<meta http-equiv="refresh" content="8">{% endif %}
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="/">Job<span>Radar</span></a>
   <nav>
-    {% set links = [("/", "Dashboard"), ("/jobs", "Jobs"), ("/queue", "Today's queue"), ("/tracker", "Tracker"), ("/sources", "Connections"), ("/profile", "Profile"), ("/answers", "Answers"), ("/alerts", "Alerts")] %}
+    {% set links = [("/", "Dashboard"), ("/jobs", "Jobs"), ("/queue", "Today's queue"), ("/tracker", "Tracker"), ("/resume", "Resume")] %}
     {% for href, label in links %}
       <a href="{{ href }}" class="{{ 'active' if (nav == href or (href != '/' and nav.startswith(href))) }}">{{ label }}{% if href == '/queue' and queue_count %} <b class="pill">{{ queue_count }}</b>{% endif %}</a>
     {% endfor %}
+    <a href="/profile" class="{{ 'active' if in_settings }}">Settings</a>
   </nav>
   <form method="post" action="/sync" class="sync">
-    <button class="btn small" {{ 'disabled' if syncing }}>{{ 'Syncing…' if syncing else 'Sync now' }}</button>
+    <button class="btn small" title="Check every connected job site for new postings" {{ 'disabled' if syncing }}>{{ 'Checking for jobs…' if syncing else 'Check for new jobs' }}</button>
   </form>
 </header>
 <main>
-  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if msg %}<div class="flash ok" data-autohide>{{ msg }}</div>{% endif %}
   {% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+  {% if in_settings %}
+  <nav class="subnav">
+    {% for href, label in [("/profile", "Profile & preferences"), ("/sources", "Job sites"), ("/alerts", "Notifications"), ("/answers", "Answers & cover letter")] %}
+    <a href="{{ href }}" class="{{ 'active' if nav.startswith(href) or (href == '/sources' and nav.startswith('/import')) }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
   {% block content %}{% endblock %}
 </main>
 <script src="{{ url_for('static', path='app.js') }}"></script>

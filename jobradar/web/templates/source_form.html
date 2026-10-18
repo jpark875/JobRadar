@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import field_inputs %}
 {% block title %}{{ adapter.label }}{% endblock %}
 {% block content %}
 <h1>{{ 'Edit' if source else 'Connect' }} {{ adapter.label }}</h1>
@@ -18,20 +19,7 @@
 <form method="post" action="{{ '/sources/%d' % source.id if source else '/sources' }}" class="card stack narrow">
   <input type="hidden" name="kind" value="{{ adapter.kind }}">
   <label>Name <input name="name" value="{{ source.name if source else adapter.label }}"></label>
-  {% for f in adapter.fields %}
-  <label>{{ f.label }}{% if f.required %} <span class="req">*</span>{% endif %}
-    {% if f.help %}<span class="hint">{{ f.help }}</span>{% endif %}
-    {% if f.type == 'textarea' %}
-      <textarea name="{{ f.name }}" rows="4" {{ 'required' if f.required }}>{{ config.get(f.name, f.default) }}</textarea>
-    {% elif f.type == 'select' %}
-      <select name="{{ f.name }}">{% for o in f.options %}<option value="{{ o }}" {{ 'selected' if config.get(f.name, f.default) == o }}>{{ o or 'Any' }}</option>{% endfor %}</select>
-    {% elif f.type == 'password' %}
-      <input type="password" name="{{ f.name }}" autocomplete="new-password" placeholder="{{ '•••••••• (unchanged)' if config.get(f.name) else '' }}" {{ 'required' if f.required and not config.get(f.name) }}>
-    {% else %}
-      <input type="{{ 'number' if f.type == 'number' else 'text' }}" name="{{ f.name }}" value="{{ config.get(f.name, f.default) }}" {{ 'required' if f.required }}>
-    {% endif %}
-  </label>
-  {% endfor %}
+  {{ field_inputs(adapter.fields, config) }}
   <div class="actions">
     <button class="btn">{{ 'Save' if source else 'Connect and sync' }}</button>
     <a class="btn ghost" href="/sources">Cancel</a>

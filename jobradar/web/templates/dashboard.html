@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% from "_macros.html" import job_card %}
+{% from "_macros.html" import job_card, grade_badge %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 {% if setup_needed %}
 <section class="card setup">
-  <h2>Get set up</h2>
+  <h2>Finish setting up</h2>
   <ol>
-    <li class="{{ 'done' if profile.resume_text }}"><a href="/profile">Upload your resume and set what you're looking for</a></li>
-    <li class="{{ 'done' if stats.sources }}"><a href="/sources">Connect job sites</a> (job alert emails from Indeed, LinkedIn and Handshake, plus job board APIs)</li>
-    <li><a href="/alerts">Choose where to get alerts</a> (phone push, email, Discord or Slack)</li>
+    <li class="{{ 'done' if profile.resume_text }}"><a href="/welcome?step=1">Add your resume</a></li>
+    <li class="{{ 'done' if profile.target_titles }}"><a href="/welcome?step=2">Tell JobRadar what you're looking for</a></li>
+    <li class="{{ 'done' if stats.sources }}"><a href="/welcome?step=3">Connect job sites</a></li>
   </ol>
 </section>
 {% endif %}
 
+<p class="muted small legend">Each job gets a match score from 0 to 100 based on your resume and preferences: <span class="score-key hi">70+</span> strong, <span class="score-key mid">45-69</span> worth a look, <span class="score-key lo">&lt;45</span> weak.</p>
 <section class="stats">
   <div class="stat">
     <span class="label">Applied today</span>
@@ -23,40 +24,62 @@
   <div class="stat"><span class="label">Applied this week</span><span class="value">{{ stats.applied_week }}</span></div>
   <div class="stat"><span class="label">New in 24h</span><span class="value">{{ stats.new_24h }}</span></div>
   <div class="stat"><span class="label">Interviews</span><span class="value">{{ stats.by_status.get('interviewing', 0) }}</span></div>
+  <a class="stat link" href="/resume" title="See how to improve your resume">
+    <span class="label">Resume grade</span>
+    {% if report %}<span class="value">{{ grade_badge(report) }} <small>{{ report.score }}/100</small></span>{% else %}<span class="value"><small>Upload →</small></span>{% endif %}
+  </a>
 </section>
 
 {% if stats.last_run %}
 <p class="muted small">
-  Last sync {{ stats.last_run.started_at|timeago }}: {{ stats.last_run.fetched }} postings checked, {{ stats.last_run.new_jobs }} new, {{ stats.last_run.alerted }} alerted.
-  {% if stats.last_run.errors %}<span class="warn">{{ stats.last_run.errors|length }} source error(s): {{ stats.last_run.errors|join('; ') }}</span>{% endif %}
+  Last checked {{ stats.last_run.started_at|timeago }}: {{ stats.last_run.fetched }} postings looked at, {{ stats.last_run.new_jobs }} new{% if stats.last_run.alerted %}, {{ stats.last_run.alerted }} sent to you as alerts{% endif %}.
+  {% if stats.last_run.errors %}<a class="warn" href="/sources">{{ stats.last_run.errors|length }} job site{{ 's' if stats.last_run.errors|length != 1 }} had a problem. See details.</a>{% endif %}
 </p>
 {% endif %}
 
-<div class="grid2">
+<div class="dash">
   <section class="card">
     <div class="card-head">
-      <h2>Fresh matches</h2>
-      <a href="/jobs?sort=newest&days=2">See all new</a>
+      <h2>Your best matches</h2>
+      <a href="/jobs">See all jobs</a>
     </div>
-    {% for job in fresh %}{{ job_card(job) }}{% else %}<p class="muted">Nothing new in the last two days yet.</p>{% endfor %}
+    {% for job in top %}{{ job_card(job) }}{% else %}
+      <div class="empty">
+        {% if not stats.sources %}<p class="muted">Connect a job site and JobRadar will start finding jobs for you.</p><a class="btn" href="/sources">Connect a job site</a>
+        {% elif not profile.resume_text %}<p class="muted">Upload your resume so JobRadar can rank jobs for you.</p><a class="btn" href="/resume">Upload resume</a>
+        {% else %}<p class="muted">No open matches yet. JobRadar checks your sites every {{ profile.sync_interval_minutes }} minutes.</p>{% endif %}
+      </div>
+    {% endfor %}
   </section>
-  <section class="card">
-    <div class="card-head">
-      <h2>Best open matches</h2>
-      <form method="post" action="/queue/fill"><button class="btn small">Fill today's queue</button></form>
-    </div>
-    {% for job in top %}{{ job_card(job) }}{% else %}<p class="muted">Connect a source and upload your resume to see recommendations.</p>{% endfor %}
-  </section>
-</div>
 
-{% if follow_ups %}
-<section class="card">
-  <div class="card-head"><h2>Follow-ups due</h2><a href="/tracker">Tracker</a></div>
-  {% for job in follow_ups %}
-  <div class="row">
-    <a href="/jobs/{{ job.id }}">{{ job.title }}</a> <span class="muted">at {{ job.company }} · applied {{ job.applied_at|timeago }}</span>
-  </div>
-  {% endfor %}
-</section>
-{% endif %}
+  <aside>
+    <section class="card">
+      <div class="card-head"><h2>Today's queue</h2>{% if queue %}<a href="/queue">Open</a>{% endif %}</div>
+      {% if queue %}
+        <p class="muted small">{{ queue|length }} job{{ 's' if queue|length != 1 }} lined up. Work through them one by one.</p>
+        {% for job in queue[:5] %}<div class="row small"><a href="/jobs/{{ job.id }}">{{ job.title }}</a> <span class="muted">· {{ job.company }}</span></div>{% endfor %}
+        <a class="btn small" href="/queue">Start applying</a>
+      {% else %}
+        <p class="muted small">Pick your top matches for today in one click, then apply to them in order.</p>
+        <form method="post" action="/queue/fill"><button class="btn small">Plan today's applications</button></form>
+      {% endif %}
+    </section>
+
+    {% if follow_ups %}
+    <section class="card">
+      <div class="card-head"><h2>Follow-ups due</h2><a href="/tracker">Tracker</a></div>
+      {% for job in follow_ups %}
+      <div class="row small"><a href="/jobs/{{ job.id }}">{{ job.title }}</a> <span class="muted">· {{ job.company }} · applied {{ job.applied_at|timeago }}</span></div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if report and report.fixes %}
+    <section class="card">
+      <div class="card-head"><h2>Improve your resume</h2><a href="/resume">Details</a></div>
+      {% for c in report.fixes[:3] %}<div class="row small"><b>{{ c.title }}:</b> <span class="muted">{{ c.summary }}</span></div>{% endfor %}
+    </section>
+    {% endif %}
+  </aside>
+</div>
 {% endblock %}

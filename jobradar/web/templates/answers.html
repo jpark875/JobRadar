@@ -1,28 +1,53 @@
 {% extends "base.html" %}
-{% block title %}Answer bank{% endblock %}
+{% block title %}Answers &amp; cover letter{% endblock %}
 {% block content %}
-<h1>Answer bank</h1>
-<p class="muted">Write each common application question once. Answers show up on every job page ready to copy, and the browser extension matches them to questions on application forms. Placeholders like <code>{company}</code> and <code>{title}</code> are filled in per job.</p>
+<h1>Answers &amp; cover letter</h1>
+<p class="muted">Write the answers to common application questions once. They appear on every job page ready to copy, and the browser extension fills them into application forms. Words in curly braces, like <code>{company}</code>, are swapped for each job's details.</p>
 
-{% for a in answers %}
-<form method="post" action="/answers" class="card stack answer-edit">
-  <input type="hidden" name="answer_id" value="{{ a.id }}">
-  <label>Question <input name="question" value="{{ a.question }}" required></label>
-  <label>Answer <textarea name="answer" rows="3">{{ a.answer }}</textarea></label>
-  <label>Match keywords <span class="hint">Comma separated words that show up in this question on forms</span><input name="keywords" value="{{ a.keywords }}"></label>
-  <div class="actions">
-    <button class="btn small">Save</button>
-    <button class="btn small ghost danger" formaction="/answers/{{ a.id }}/delete" data-confirm="Delete this answer?">Delete</button>
+<div class="grid2">
+  <div>
+    <h2>Saved answers</h2>
+    {% for a in answers %}
+    <form method="post" action="/answers" class="card stack answer-edit">
+      <input type="hidden" name="answer_id" value="{{ a.id }}">
+      <label>Question <input name="question" value="{{ a.question }}" required></label>
+      <label>Answer <textarea name="answer" rows="3">{{ a.answer }}</textarea></label>
+      <details><summary class="small muted">Matching keywords</summary>
+        <label><span class="hint">Words that show up in this question on application forms, comma separated</span><input name="keywords" value="{{ a.keywords }}"></label>
+      </details>
+      <div class="actions">
+        <button class="btn small">Save</button>
+        <button class="btn small ghost danger" formaction="/answers/{{ a.id }}/delete" data-confirm="Delete this answer?">Delete</button>
+      </div>
+    </form>
+    {% endfor %}
+    <form method="post" action="/answers" class="card stack">
+      <h3>Add a question</h3>
+      <label>Question <input name="question" required placeholder="Describe a project you're proud of"></label>
+      <label>Answer <textarea name="answer" rows="3"></textarea></label>
+      <label>Matching keywords <span class="hint">Optional</span><input name="keywords" placeholder="project, proud, accomplishment"></label>
+      <button class="btn small">Add</button>
+    </form>
   </div>
-</form>
-{% endfor %}
 
-<form method="post" action="/answers" class="card stack">
-  <h2>New answer</h2>
-  <label>Question <input name="question" required placeholder="Describe a project you're proud of"></label>
-  <label>Answer <textarea name="answer" rows="3"></textarea></label>
-  <label>Match keywords <input name="keywords" placeholder="project, proud, accomplishment"></label>
-  <button class="btn small">Add</button>
-</form>
-<p class="muted small">Placeholders: {% for p in placeholders %}<code>{{ '{' ~ p ~ '}' }}</code> {% endfor %}</p>
+  <section class="card" id="templates">
+    <h2>Cover letter template</h2>
+    <p class="muted small">Every job page shows this letter filled in for that job, ready to copy or download.</p>
+    <form method="post" action="/profile" class="stack">
+      <input type="hidden" name="section" value="templates">
+      <input type="hidden" name="next" value="/answers">
+      <label>Your strongest accomplishment <span class="hint">One or two sentences. Goes where <code>{highlight}</code> appears.</span>
+        <textarea name="resume_highlight" rows="3" placeholder="At Acme I rebuilt the reporting pipeline, cutting report time from 2 days to 20 minutes.">{{ profile.resume_highlight }}</textarea>
+      </label>
+      <label>Template
+        <textarea name="cover_letter_template" rows="16">{{ profile.cover_letter_template }}</textarea>
+      </label>
+      <details><summary class="small muted">Available placeholders</summary>
+        <p class="small">{% for p in placeholders %}<code>{{ '{' ~ p ~ '}' }}</code> {% endfor %}</p>
+        <p class="small muted"><code>{top_skills}</code> uses the skills from your resume that the job asks for.</p>
+      </details>
+      <button class="btn small">Save template</button>
+    </form>
+  </section>
+</div>
 {% endblock %}

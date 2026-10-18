@@ -17,7 +17,7 @@
 <div class="job">
   {{ score(job) }}
   <div class="job-main">
-    <a class="job-title" href="/jobs/{{ job.id }}">{{ job.title }}</a>
+    <a class="job-title" href="/jobs/{{ job.id }}">{{ job.title }}</a>{% if job is fresh %}<span class="status s-new">new</span>{% endif %}
     {{ meta(job) }}
     {% set d = job.score_details or {} %}
     {% if d.matched_skills %}<div class="chips">{% for s in d.matched_skills[:6] %}<span class="chip good">{{ s }}</span>{% endfor %}</div>{% endif %}
@@ -31,4 +31,36 @@
   </div>
   {% endif %}
 </div>
+{%- endmacro %}
+
+{% macro field_inputs(fields, config={}) -%}
+{% for f in fields %}
+<label><span>{{ f.label }}{% if f.required %} <span class="req">*</span>{% endif %}</span>
+  {% if f.help %}<span class="hint">{{ f.help }}</span>{% endif %}
+  {% if f.type == 'textarea' %}
+    <textarea name="{{ f.name }}" rows="4" {{ 'required' if f.required }}>{{ config.get(f.name, f.default) }}</textarea>
+  {% elif f.type == 'select' %}
+    <select name="{{ f.name }}">{% for o in f.options %}<option value="{{ o }}" {{ 'selected' if config.get(f.name, f.default) == o }}>{{ o or 'Any' }}</option>{% endfor %}</select>
+  {% elif f.type == 'password' %}
+    <input type="password" name="{{ f.name }}" autocomplete="new-password" placeholder="{{ '•••••••• (unchanged)' if config.get(f.name) else '' }}" {{ 'required' if f.required and not config.get(f.name) }}>
+  {% else %}
+    <input type="{{ 'number' if f.type == 'number' else 'text' }}" name="{{ f.name }}" value="{{ config.get(f.name, f.default) }}" {{ 'required' if f.required }}>
+  {% endif %}
+</label>
+{% endfor %}
+{%- endmacro %}
+
+{% macro grade_badge(report, size='') -%}
+<span class="grade grade-{{ report.grade[0]|lower }} {{ size }}" title="Resume score {{ report.score }}/100">{{ report.grade }}</span>
+{%- endmacro %}
+
+{% macro dropzone(next='/resume', label='Drop your resume here or click to choose a file') -%}
+<form method="post" action="/profile/resume" enctype="multipart/form-data">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label class="dropzone" data-dropzone data-autosubmit>
+    <input type="file" name="file" accept=".pdf,.docx,.txt,.md" required>
+    <b>{{ label }}</b>
+    <span class="muted small" data-filename>PDF, Word (.docx) or plain text</span>
+  </label>
+</form>
 {%- endmacro %}

@@ -5,8 +5,8 @@
 <div class="page-head">
   <h1>Jobs <small class="muted">{{ total }}</small></h1>
   <div class="actions">
-    <a class="btn ghost small" href="/import">Import alert email</a>
-    <a class="btn ghost small" href="/jobs/new">Add a job</a>
+    <a class="btn ghost small" href="/import" title="Pull jobs out of an Indeed, LinkedIn or Handshake alert email">Import alert email</a>
+    <a class="btn ghost small" href="/jobs/new">Add a job yourself</a>
   </div>
 </div>
 
@@ -32,18 +32,20 @@
     <option value="{{ value }}" {{ 'selected' if filters.sort == value }}>{{ label }}</option>
     {% endfor %}
   </select>
-  <label class="inline"><input type="checkbox" name="show_filtered" value="1" {{ 'checked' if filters.show_filtered }}> Show filtered out</label>
-  <button class="btn small">Apply</button>
+  <label class="inline" title="Jobs hidden by the filters in Settings → Profile"><input type="checkbox" name="show_filtered" value="1" {{ 'checked' if filters.show_filtered }}> Show hidden jobs</label>
+  <button class="btn small">Filter</button>
+  {% if filters.q or filters.board or filters.min_score or filters.days or filters.status != 'open' %}<a class="small" href="/jobs">Clear</a>{% endif %}
 </form>
 
+<p class="muted small legend">Sorted by match score: <span class="score-key hi">70+</span> strong, <span class="score-key mid">45-69</span> worth a look, <span class="score-key lo">&lt;45</span> weak. Click a job to see why it scored that way. Tick several to act on them at once.</p>
 <form method="post" action="/jobs/bulk" id="bulk">
   <div class="bulkbar">
     <label class="inline"><input type="checkbox" data-select-all> Select all</label>
     <span class="muted" data-selected-count>0 selected</span>
     <button class="btn small" name="action" value="queued">Add to today's queue</button>
-    <button class="btn small ghost" name="action" value="saved">Save</button>
+    <button class="btn small ghost" name="action" value="saved">Save for later</button>
     <button class="btn small ghost" name="action" value="applied">Mark applied</button>
-    <button class="btn small ghost danger" name="action" value="dismissed">Dismiss</button>
+    <button class="btn small ghost danger" name="action" value="dismissed">Not interested</button>
   </div>
   <div class="list">
   {% for job in jobs %}
@@ -53,7 +55,7 @@
       {{ score(job) }}
       <div class="job-main">
         <a class="job-title" href="/jobs/{{ job.id }}">{{ job.title }}</a>
-        {% if job.status != 'new' %}<span class="status s-{{ job.status }}">{{ job.status }}</span>{% endif %}
+        {% if job.status != 'new' %}<span class="status s-{{ job.status }}">{{ job.status }}</span>{% elif job is fresh %}<span class="status s-new">new</span>{% endif %}
         {{ meta(job) }}
         <div class="chips">
           {% for s in (d.matched_skills or [])[:5] %}<span class="chip good">{{ s }}</span>{% endfor %}
@@ -63,11 +65,20 @@
         </div>
       </div>
       <div class="job-actions">
-        {% if job.link %}<a class="btn small ghost" href="{{ job.link }}" target="_blank" rel="noopener">Open</a>{% endif %}
+        {% if job.link %}<a class="btn small ghost" href="{{ job.link }}" target="_blank" rel="noopener" title="Open the posting in a new tab">Open ↗</a>{% endif %}
+        {% if job.status in ('new', 'saved') %}<button class="btn small" formaction="/jobs/{{ job.id }}/status" name="status" value="queued" title="Add to today's queue">Queue</button>{% endif %}
+        {% if job.status != 'dismissed' %}<button class="btn small ghost" formaction="/jobs/{{ job.id }}/status" name="status" value="dismissed" title="Not interested">✕</button>{% endif %}
       </div>
     </div>
   {% else %}
-    <p class="muted empty">No jobs match these filters.</p>
+    <div class="empty">
+      {% if total == 0 and not (filters.q or filters.board or filters.min_score or filters.days or filters.status != 'open') %}
+        <p class="muted">No jobs yet.</p>
+        <a class="btn" href="/sources">Connect a job site</a>
+      {% else %}
+        <p class="muted">No jobs match these filters. <a href="/jobs">Clear filters</a></p>
+      {% endif %}
+    </div>
   {% endfor %}
   </div>
 </form>

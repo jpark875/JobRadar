@@ -1,6 +1,6 @@
 # JobRadar
 
-JobRadar pulls job postings from many sites into one place, ranks every posting against your resume, and alerts you when a strong new match shows up. It also includes tools that make it realistic to apply to 10+ jobs a day:
+JobRadar pulls job postings from many sites into one place, ranks every posting against your resume, and alerts you when a strong new match shows up. It grades your resume and tells you exactly what to fix. It also includes tools that make it realistic to apply to 10+ jobs a day:
 
 - a daily application queue
 - an answer bank
@@ -16,7 +16,7 @@ It runs locally on your machine. Your resume, credentials and application histor
 - **Job alert emails** from Indeed, LinkedIn, Handshake, Glassdoor, ZipRecruiter, Wellfound and Monster. JobRadar reads them from your inbox over IMAP (read-only) and extracts every posting. You can also paste or upload a single alert email.
 - **JSearch API**: Indeed, LinkedIn, Glassdoor, ZipRecruiter and other boards indexed by Google for Jobs.
 - **Adzuna, Jooble and USAJOBS** aggregator APIs.
-- **Company career pages** on Greenhouse, Lever, Ashby and SmartRecruiters.
+- **Company career pages**: paste careers page links (or just company names) and JobRadar works out whether each company uses Greenhouse, Lever, Ashby or SmartRecruiters.
 - **The Muse, Remotive and Remote OK.**
 - **Manual entry**, or one click from the browser extension, for anything else.
 
@@ -32,6 +32,20 @@ It runs locally on your machine. Your resume, credentials and application histor
   - your salary floor
 - Every score comes with reasons: skills you match, skills the posting lists that your resume doesn't, and warnings like "Asks for 7+ years".
 - Hard filters (excluded title words or companies, remote only, must-have keywords, maximum age) hide postings without deleting them.
+
+**Resume grader**
+- Scores your resume out of 100, with a letter grade, across 11 checks:
+  - contact details and standard sections
+  - length for your experience level
+  - quantified results in your bullets
+  - strong action verbs, and variety in how bullets begin
+  - bullet length
+  - no first-person pronouns or filler buzzwords
+  - coverage of the skills that come up most in the jobs you're seeing
+  - whether applicant tracking systems can read the file
+- Lists fixes in order of how many points each is worth, and quotes the lines that need work.
+- **Match to a job**: pick any saved job, or paste a description, to see which skills and repeated keywords it wants that your resume doesn't mention. Every job page shows a short version of this.
+- **Grade a draft** without replacing your saved resume, so you can iterate.
 
 **Alerts**
 - After each scheduled sync, you get one alert listing new postings above your score threshold.
@@ -64,11 +78,18 @@ pip install -e .
 jobradar serve
 ```
 
-Open http://127.0.0.1:8765, then:
+Open http://127.0.0.1:8765. On first run, a four-step setup guide walks you through:
 
-1. **Profile**: upload your resume, then set target titles, locations, level and filters.
-2. **Connections**: add sources. A good starting set is email alerts plus JSearch, plus Greenhouse/Lever boards for companies you like.
-3. **Alerts**: add ntfy (free phone push) or another channel and hit Test.
+1. **Resume**: drop in your resume. It's parsed and graded on the spot.
+2. **What you want**: titles (with suggestions based on your resume), locations, remote, level, salary floor and a daily goal.
+3. **Where to look**:
+   - free job boards in one click
+   - companies' careers pages
+   - Indeed/LinkedIn/Handshake alert emails
+   - JSearch
+4. **Alerts**: phone push through ntfy (no account needed) or email.
+
+Everything can be changed later under **Settings**. You can rerun the setup guide from Settings → Profile & preferences.
 
 The app syncs on the interval you choose (60 minutes by default) while it's running. To sync from cron instead:
 
@@ -113,7 +134,7 @@ On a supported application page, click **Autofill with JobRadar** (bottom right)
 | USAJOBS | https://developer.usajobs.gov |
 | The Muse (optional) | https://www.themuse.com/developers/api/v2 |
 
-Greenhouse, Lever, Ashby, SmartRecruiters, Remotive and Remote OK need no key. For career-page boards, enter the company's board name from its jobs URL, for example `stripe` from `boards.greenhouse.io/stripe`.
+Greenhouse, Lever, Ashby, SmartRecruiters, Remotive and Remote OK need no key. For company career pages, paste the jobs page link (for example `boards.greenhouse.io/stripe` or `jobs.lever.co/plaid`); a plain company name also works most of the time.
 
 ## Development
 
@@ -128,6 +149,7 @@ Project layout:
 jobradar/
   sources/      connectors (APIs, career pages, email alerts)
   matching.py   scoring and recommendation logic
+  grader.py     resume grader and job-fit checker
   resume.py     resume text extraction and experience estimate
   skills.py     skill taxonomy
   service.py    sync, dedupe, alerts, queue

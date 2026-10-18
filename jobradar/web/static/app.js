@@ -88,3 +88,35 @@ document.querySelectorAll("[data-select]").forEach((box) => {
     lastChecked = box;
   });
 });
+
+document.querySelectorAll("[data-autohide]").forEach((el) => {
+  setTimeout(() => {
+    el.style.transition = "opacity .4s";
+    el.style.opacity = "0";
+    setTimeout(() => el.remove(), 400);
+  }, 6000);
+});
+
+document.querySelectorAll("[data-add-to]").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    const field = document.querySelector(chip.dataset.addTo);
+    const lines = field.value.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lines.includes(chip.dataset.value)) lines.push(chip.dataset.value);
+    field.value = lines.join("\n");
+    chip.classList.add("picked");
+  });
+});
+
+document.querySelectorAll("[data-dropzone]").forEach((zone) => {
+  const input = zone.querySelector("input[type=file]");
+  const label = zone.querySelector("[data-filename]");
+  const show = () => { if (label && input.files.length) label.textContent = input.files[0].name; };
+  input.addEventListener("change", () => { show(); if (zone.dataset.autosubmit !== undefined) zone.closest("form").submit(); });
+  ["dragenter", "dragover"].forEach((type) => zone.addEventListener(type, (e) => { e.preventDefault(); zone.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((type) => zone.addEventListener(type, () => zone.classList.remove("over")));
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    input.files = e.dataTransfer.files;
+    input.dispatchEvent(new Event("change"));
+  });
+});

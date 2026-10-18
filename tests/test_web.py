@@ -105,3 +105,92 @@ def test_extension_api(seeded, db):
     }).json()
     assert list(answers["answers"].values()) == ["No"]
     assert "X hiring team" in answers["cover_letter"]
+
+
+def test_first_visit_goes_to_setup_guide(client):
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 303 and response.headers["location"] == "/welcome"
+    for step in range(1, 5):
+        assert client.get(f"/welcome?step={step}").status_code == 200
+
+
+def test_setup_guide_flow(client, db):
+    response = client.post("/profile/resume", data={"next": "/welcome?step=2"},
+                           files={"file": ("resume.txt", RESUME.encode())}, follow_redirects=False)
+    assert response.headers["location"].startswith("/welcome?step=2")
+    assert "Resume+grade" in response.headers["location"]
+
+    step2 = client.get("/welcome?step=2").text
+    assert "Software Engineer" in step2 or "Data Engineer" in step2
+
+    response = client.post("/profile", data={
+        "section": "preferences", "next": "/welcome?step=3", "target_titles": "Data Engineer",
+        "experience_level": "entry", "remote_ok": "on", "min_salary": "", "daily_goal": "15",
+    }, follow_redirects=False)
+    assert response.headers["location"].startswith("/welcome?step=3")
+    profile = service.get_profile(db)
+    db.refresh(profile)
+    assert profile.target_titles == ["Data Engineer"] and profile.daily_goal == 15
+
+    client.post("/sources/quick-add", data={"next": "/welcome?step=3"})
+    assert "Connected" in client.get("/welcome?step=3").text
+
+    response = client.post("/alerts", data={"kind": "ntfy", "name": "Phone", "topic": "jobradar-test", "next": "/welcome?step=4"},
+                           follow_redirects=False)
+    assert response.headers["location"].startswith("/welcome?step=4")
+
+    response = client.post("/welcome/finish", follow_redirects=False)
+    assert response.headers["location"].startswith("/?msg=")
+    db.refresh(profile)
+    assert profile.onboarded
+    assert client.get("/", follow_redirects=False).status_code == 200
+
+
+def test_resume_page_grades_and_matches(seeded, db):
+    page = seeded.get("/resume").text
+    assert "/100" in page and "What to fix" in page
+    job = db.query(Job).filter_by(title="Data Engineer").one()
+    page = seeded.get(f"/resume?job={job.id}").text
+    assert "They want, not on your resume" in page and "spark" in page
+
+    draft = seeded.post("/resume/grade", data={"text": "Jordan\n- Responsible for stuff and things at work\n" * 3}).text
+    assert "You're looking at a draft" in draft
+
+    pasted = seeded.post("/resume/grade", data={"job_title": "Analyst", "job_text": "Looker and Tableau and SQL. Looker dashboards."}).text
+    assert "looker" in pasted
+
+
+def test_resume_page_without_resume(client):
+    assert "Upload your resume to get it graded" in client.get("/resume").text
+
+
+def test_job_detail_shows_tailoring(seeded, db):
+    job = db.query(Job).filter_by(title="Data Engineer").one()
+    assert "Tailor your resume" in seeded.get(f"/jobs/{job.id}").text
+
+
+def test_bad_resume_upload_shows_error(client):
+    response = client.post("/profile/resume", files={"file": ("resume.xyz", b"hello")}, follow_redirects=False)
+    assert "err=" in response.headers["location"]
+
+
+def test_old_databases_get_new_columns(db):
+    from sqlalchemy import inspect, text
+
+    from jobradar.db import get_engine, init_db
+
+    with get_engine().begin() as conn:
+        conn.execute(text("ALTER TABLE profile DROP COLUMN onboarded"))
+    init_db()
+    assert "onboarded" in {c["name"] for c in inspect(get_engine()).get_columns("profile")}
+
+
+def test_job_status_and_notes(seeded, db):
+    job = db.query(Job).filter_by(title="Software Engineer").one()
+    response = seeded.post(f"/jobs/{job.id}/status", data={"status": "applied"}, follow_redirects=False)
+    assert response.status_code == 303 and "follow-up" in response.headers["location"]
+    assert seeded.post(f"/jobs/{job.id}/status", data={"status": ""}, follow_redirects=False).status_code == 303
+    response = seeded.post(f"/jobs/{job.id}/notes", data={"notes": "Talked to Dana", "follow_up_on": "2026-11-01"}, follow_redirects=False)
+    assert response.headers["location"].startswith(f"/jobs/{job.id}")
+    db.refresh(job)
+    assert job.status == "applied" and job.notes == "Talked to Dana"
