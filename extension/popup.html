@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 320px; margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1c1f24; }
+    header { padding: 12px 14px; border-bottom: 1px solid #e3e6ea; display: flex; justify-content: space-between; align-items: center; }
+    header b span { color: #2563eb; }
+    section { padding: 12px 14px; border-bottom: 1px solid #e3e6ea; }
+    .bar { height: 6px; background: #eef1f5; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .bar i { display: block; height: 100%; background: #2563eb; }
+    button { width: 100%; margin-top: 6px; padding: 8px; border-radius: 7px; border: 1px solid #2563eb; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
+    button.ghost { background: #fff; color: #1c1f24; border-color: #e3e6ea; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .status { min-height: 18px; margin-top: 6px; font-size: 12px; }
+    ul { margin: 6px 0 0; padding-left: 18px; }
+    li { margin: 2px 0; }
+    input { width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #e3e6ea; border-radius: 6px; }
+    a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header><b>Job<span>Radar</span></b><a id="open" href="#">Open app</a></header>
+  <section>
+    <div><b id="progress">…</b> <span class="muted">applied today</span></div>
+    <div class="bar"><i id="bar" style="width: 0"></i></div>
+    <ul id="queue"></ul>
+  </section>
+  <section>
+    <div id="job" class="muted">Checking this page…</div>
+    <button id="autofill">Autofill this application</button>
+    <button id="save" class="ghost">Save this job</button>
+    <button id="applied" class="ghost">Mark this job applied</button>
+    <div id="status" class="status"></div>
+  </section>
+  <section>
+    <label class="muted">JobRadar server <input id="server" placeholder="http://127.0.0.1:8765"></label>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

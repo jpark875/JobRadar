@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "JobRadar Autofill",
+  "version": "0.1.0",
+  "description": "Autofill job applications from your JobRadar profile and track what you apply to.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "JobRadar" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://*.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://jobs.smartrecruiters.com/*",
+        "https://*.icims.com/*",
+        "https://jobs.jobvite.com/*",
+        "https://apply.workable.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.breezy.hr/*",
+        "https://*.recruitee.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
