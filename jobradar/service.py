@@ -1,5 +1,6 @@
 import logging
 import threading
+from collections import Counter
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -327,3 +328,22 @@ def dashboard_stats(session: Session, profile: Profile) -> dict:
         "sources": session.scalar(select(func.count(Source.id)).where(Source.enabled.is_(True))) or 0,
         "last_run": session.scalars(select(SyncRun).order_by(SyncRun.id.desc()).limit(1)).first(),
     }
+
+
+def skill_demand(session: Session, limit: int = 15) -> list[dict]:
+    rows = list(session.execute(
+        select(Job.score, Job.score_details).where(Job.filtered_out.is_(False), Job.status != "dismissed")
+    ))
+    relevant = [details for score, details in rows if score >= 40] or [details for _, details in rows]
+    if len(relevant) < 5:
+        relevant = [details for _, details in rows]
+    counts: Counter = Counter()
+    for details in relevant:
+        details = details or {}
+        counts.update(set(details.get("matched_skills", [])) | set(details.get("missing_skills", [])))
+    total = len(relevant) or 1
+    return [
+        {"skill": skill, "count": count, "share": round(count / total * 100)}
+        for skill, count in counts.most_common(limit)
+        if count >= 2 or total < 5
+    ]
