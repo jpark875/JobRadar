@@ -71,6 +71,7 @@ class Profile(Base):
     follow_up_days: Mapped[int] = mapped_column(Integer, default=7)
     cover_letter_template: Mapped[str] = mapped_column(Text, default=DEFAULT_COVER_LETTER)
     resume_highlight: Mapped[str] = mapped_column(Text, default="")
+    onboarded: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Source(Base):
