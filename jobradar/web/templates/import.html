@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Import alert email{% endblock %}
+{% block content %}
+<h1>Import a job alert email</h1>
+<p class="muted">Pull every posting out of an Indeed, LinkedIn, Handshake, Glassdoor or ZipRecruiter alert without connecting your inbox. In Gmail use ⋮ → "Download message" to get the .eml file.</p>
+<div class="grid2">
+  <form method="post" action="/import" enctype="multipart/form-data" class="card stack">
+    <h2>Upload .eml</h2>
+    <input type="file" name="file" accept=".eml,.html,.htm,.txt" required>
+    <label>Site <span class="hint">Detected from the sender when possible</span>
+      <select name="board"><option value="">Detect automatically</option>{% for b in boards %}<option>{{ b }}</option>{% endfor %}</select>
+    </label>
+    <button class="btn">Import</button>
+  </form>
+  <form method="post" action="/import" class="card stack">
+    <h2>Paste email content</h2>
+    <label>Site
+      <select name="board" required>{% for b in boards %}<option>{{ b }}</option>{% endfor %}</select>
+    </label>
+    <textarea name="html" rows="10" placeholder="Paste the email's HTML source (Show original) or its text with links" required></textarea>
+    <button class="btn">Import</button>
+  </form>
+</div>
+{% endblock %}

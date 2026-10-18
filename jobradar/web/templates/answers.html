@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Answer bank{% endblock %}
+{% block content %}
+<h1>Answer bank</h1>
+<p class="muted">Write each common application question once. Answers show up on every job page ready to copy, and the browser extension matches them to questions on application forms. Placeholders like <code>{company}</code> and <code>{title}</code> are filled in per job.</p>
+
+{% for a in answers %}
+<form method="post" action="/answers" class="card stack answer-edit">
+  <input type="hidden" name="answer_id" value="{{ a.id }}">
+  <label>Question <input name="question" value="{{ a.question }}" required></label>
+  <label>Answer <textarea name="answer" rows="3">{{ a.answer }}</textarea></label>
+  <label>Match keywords <span class="hint">Comma separated words that show up in this question on forms</span><input name="keywords" value="{{ a.keywords }}"></label>
+  <div class="actions">
+    <button class="btn small">Save</button>
+    <button class="btn small ghost danger" formaction="/answers/{{ a.id }}/delete" data-confirm="Delete this answer?">Delete</button>
+  </div>
+</form>
+{% endfor %}
+
+<form method="post" action="/answers" class="card stack">
+  <h2>New answer</h2>
+  <label>Question <input name="question" required placeholder="Describe a project you're proud of"></label>
+  <label>Answer <textarea name="answer" rows="3"></textarea></label>
+  <label>Match keywords <input name="keywords" placeholder="project, proud, accomplishment"></label>
+  <button class="btn small">Add</button>
+</form>
+<p class="muted small">Placeholders: {% for p in placeholders %}<code>{{ '{' ~ p ~ '}' }}</code> {% endfor %}</p>
+{% endblock %}

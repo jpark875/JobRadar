@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score, meta %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Jobs <small class="muted">{{ total }}</small></h1>
+  <div class="actions">
+    <a class="btn ghost small" href="/import">Import alert email</a>
+    <a class="btn ghost small" href="/jobs/new">Add a job</a>
+  </div>
+</div>
+
+<form class="filters" method="get" action="/jobs">
+  <input type="search" name="q" value="{{ filters.q }}" placeholder="Search title, company, location, description">
+  <select name="status">
+    <option value="open" {{ 'selected' if filters.status == 'open' }}>Open (new + saved)</option>
+    <option value="all" {{ 'selected' if filters.status == 'all' }}>All statuses</option>
+    {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s|capitalize }}</option>{% endfor %}
+  </select>
+  <select name="board">
+    <option value="">All sites</option>
+    {% for b in boards %}<option {{ 'selected' if filters.board == b }}>{{ b }}</option>{% endfor %}
+  </select>
+  <select name="days">
+    {% for value, label in [(0, "Any time"), (1, "Past 24h"), (3, "Past 3 days"), (7, "Past week"), (14, "Past 2 weeks")] %}
+    <option value="{{ value }}" {{ 'selected' if filters.days == value }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label class="inline">Min score <input type="number" name="min_score" min="0" max="100" value="{{ filters.min_score }}"></label>
+  <select name="sort">
+    {% for value, label in [("score", "Best match"), ("newest", "Newest"), ("company", "Company")] %}
+    <option value="{{ value }}" {{ 'selected' if filters.sort == value }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label class="inline"><input type="checkbox" name="show_filtered" value="1" {{ 'checked' if filters.show_filtered }}> Show filtered out</label>
+  <button class="btn small">Apply</button>
+</form>
+
+<form method="post" action="/jobs/bulk" id="bulk">
+  <div class="bulkbar">
+    <label class="inline"><input type="checkbox" data-select-all> Select all</label>
+    <span class="muted" data-selected-count>0 selected</span>
+    <button class="btn small" name="action" value="queued">Add to today's queue</button>
+    <button class="btn small ghost" name="action" value="saved">Save</button>
+    <button class="btn small ghost" name="action" value="applied">Mark applied</button>
+    <button class="btn small ghost danger" name="action" value="dismissed">Dismiss</button>
+  </div>
+  <div class="list">
+  {% for job in jobs %}
+    {% set d = job.score_details or {} %}
+    <div class="job {{ 'filtered' if job.filtered_out }}">
+      <input type="checkbox" name="ids" value="{{ job.id }}" data-select>
+      {{ score(job) }}
+      <div class="job-main">
+        <a class="job-title" href="/jobs/{{ job.id }}">{{ job.title }}</a>
+        {% if job.status != 'new' %}<span class="status s-{{ job.status }}">{{ job.status }}</span>{% endif %}
+        {{ meta(job) }}
+        <div class="chips">
+          {% for s in (d.matched_skills or [])[:5] %}<span class="chip good">{{ s }}</span>{% endfor %}
+          {% for s in (d.missing_skills or [])[:3] %}<span class="chip miss" title="Listed in the job but not your resume">{{ s }}</span>{% endfor %}
+          {% for w in d.warnings or [] %}<span class="chip warn">{{ w }}</span>{% endfor %}
+          {% if d.filtered_reason %}<span class="chip warn">Filtered: {{ d.filtered_reason }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="job-actions">
+        {% if job.link %}<a class="btn small ghost" href="{{ job.link }}" target="_blank" rel="noopener">Open</a>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    <p class="muted empty">No jobs match these filters.</p>
+  {% endfor %}
+  </div>
+</form>
+
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a href="/jobs?{{ base_query }}&page={{ page - 1 }}">← Prev</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a href="/jobs?{{ base_query }}&page={{ page + 1 }}">Next →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

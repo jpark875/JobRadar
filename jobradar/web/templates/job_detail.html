@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score, meta %}
+{% block title %}{{ job.title }}{% endblock %}
+{% block content %}
+{% set d = job.score_details or {} %}
+<div class="detail-head">
+  {{ score(job) }}
+  <div>
+    <h1>{{ job.title }}</h1>
+    {{ meta(job) }}
+    <div class="status-row">
+      <span class="status s-{{ job.status }}">{{ job.status }}</span>
+      {% if job.applied_at %}<span class="muted small">Applied {{ job.applied_at.strftime('%b %d, %Y') }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  {% if job.link %}<a class="btn" href="{{ job.link }}" target="_blank" rel="noopener" data-open-apply="{{ job.id }}">Open application</a>{% endif %}
+  {% for s, label in [("applied", "Mark applied"), ("queued", "Add to queue"), ("saved", "Save"), ("interviewing", "Interviewing"), ("offer", "Offer"), ("rejected", "Rejected"), ("dismissed", "Dismiss")] %}
+    {% if job.status != s %}
+    <form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="{{ s }}"><button class="btn {{ 'ghost' if s != 'applied' }} {{ 'danger' if s == 'dismissed' }}">{{ label }}</button></form>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div class="grid2 detail">
+  <div>
+    <section class="card">
+      <h2>Why this score</h2>
+      {% if d.filtered_reason %}<p class="warn">Hidden by your filters: {{ d.filtered_reason }}</p>{% endif %}
+      <ul class="reasons">
+        {% for r in d.reasons or [] %}<li class="good">{{ r }}</li>{% endfor %}
+        {% for w in d.warnings or [] %}<li class="bad">{{ w }}</li>{% endfor %}
+      </ul>
+      <table class="components">
+        {% for name, value in (d.components or {}).items() %}
+        <tr><td>{{ name|capitalize }}</td><td>{% if value is not none %}<div class="bar"><i style="width: {{ (value * 100)|round|int }}%"></i></div>{% else %}<span class="muted small">not enough info</span>{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      {% if d.matched_skills %}<h3>Skills you have</h3><div class="chips">{% for s in d.matched_skills %}<span class="chip good">{{ s }}</span>{% endfor %}</div>{% endif %}
+      {% if d.missing_skills %}
+        <h3>In the posting but not on your resume</h3>
+        <div class="chips">{% for s in d.missing_skills %}<span class="chip miss">{{ s }}</span>{% endfor %}</div>
+        <p class="muted small">If you do have these, add them to your resume (and your skills on the Profile page) before applying. Many screeners match on exact keywords.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Cover letter</h2>
+        <div class="actions">
+          <button class="btn small ghost" data-copy="#cover">Copy</button>
+          <a class="btn small ghost" href="/jobs/{{ job.id }}/cover-letter.txt">Download</a>
+        </div>
+      </div>
+      <textarea id="cover" rows="14">{{ cover_letter }}</textarea>
+      <p class="muted small">Generated from your template on the <a href="/profile#templates">Profile</a> page. Edit here before copying; changes aren't saved.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Answer bank</h2><a href="/answers">Edit answers</a></div>
+      {% for a, rendered, question in answers %}
+      <div class="answer">
+        <div class="q">{{ question }}</div>
+        <div class="a"><span id="ans-{{ a.id }}">{{ rendered }}</span> <button class="btn tiny ghost" data-copy="#ans-{{ a.id }}">Copy</button></div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="card">
+      <h2>Notes</h2>
+      <form method="post" action="/jobs/{{ job.id }}/notes" class="stack">
+        <textarea name="notes" rows="4" placeholder="Recruiter name, referral, interview dates…">{{ job.notes }}</textarea>
+        <label>Follow up on <input type="date" name="follow_up_on" value="{{ job.follow_up_on.isoformat() if job.follow_up_on else '' }}"></label>
+        <button class="btn small">Save notes</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="card description">
+    <h2>Description</h2>
+    {% if job.description %}
+      <div class="prose">{{ job.description }}</div>
+    {% else %}
+      <p class="muted">This posting came from an alert email, which doesn't include the full description. Open the posting to read it; the score is based on the title, company and location.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

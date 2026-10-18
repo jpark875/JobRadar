@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Alerts</h1>
+  <form method="post" action="/digest"><button class="btn ghost small">Send digest now</button></form>
+</div>
+<p class="muted">After each sync you get one alert listing new postings scoring {{ profile.alert_threshold }} or higher. A daily digest of your best open matches goes out at {{ '%02d:00' % profile.digest_hour if profile.digest_hour >= 0 else 'no set time (off)' }}. Change both on the <a href="/profile#schedule">Profile</a> page.</p>
+
+{% if channels %}
+<section class="card">
+  <table class="table">
+    <thead><tr><th>Name</th><th>Type</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for c in channels %}
+    <tr class="{{ 'disabled' if not c.enabled }}">
+      <td>{{ c.name }}</td>
+      <td>{{ channel_fields[c.kind][0] if c.kind in channel_fields else c.kind }}</td>
+      <td>{% if c.last_error %}<span class="warn small">{{ c.last_error }}</span>{% elif c.enabled %}active{% else %}paused{% endif %}</td>
+      <td class="actions">
+        <form method="post" action="/alerts/{{ c.id }}/test"><button class="btn tiny">Test</button></form>
+        <form method="post" action="/alerts/{{ c.id }}/toggle"><button class="btn tiny ghost">{{ 'Pause' if c.enabled else 'Resume' }}</button></form>
+        <form method="post" action="/alerts/{{ c.id }}/delete" data-confirm="Remove {{ c.name }}?"><button class="btn tiny ghost danger">Remove</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<h2>Add a channel</h2>
+<div class="source-grid">
+  {% for kind, (label, fields) in channel_fields.items() %}
+  <form method="post" action="/alerts" class="card stack">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <h3>{{ label }}</h3>
+    <input type="hidden" name="name" value="{{ label }}">
+    {% for f in fields %}
+    <label>{{ f.label }}{% if f.help %} <span class="hint">{{ f.help }}</span>{% endif %}
+      <input type="{{ 'password' if f.type == 'password' else 'number' if f.type == 'number' else 'text' }}" name="{{ f.name }}" value="{{ f.default if f.type != 'password' else '' }}" {{ 'required' if f.required }}>
+    </label>
+    {% endfor %}
+    <button class="btn small">Add</button>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

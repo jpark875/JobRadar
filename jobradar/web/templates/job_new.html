@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Add a job{% endblock %}
+{% block content %}
+<h1>Add a job</h1>
+<p class="muted">Found something on a site JobRadar doesn't pull from? Add it here to score it and track it. The browser extension can do this in one click.</p>
+<form method="post" action="/jobs/new" class="card stack narrow">
+  <label>Title <input name="title" required></label>
+  <label>Company <input name="company"></label>
+  <label>Location <input name="location"></label>
+  <label class="inline"><input type="checkbox" name="remote"> Remote</label>
+  <label>Posting URL <input name="url" type="url"></label>
+  <label>Description <textarea name="description" rows="10" placeholder="Paste the job description for a better match score"></textarea></label>
+  <button class="btn">Add and score</button>
+</form>
+{% endblock %}

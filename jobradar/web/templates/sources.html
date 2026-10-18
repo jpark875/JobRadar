@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Connections{% endblock %}
+{% block content %}
+<h1>Connections</h1>
+
+{% if sources %}
+<section class="card">
+  <h2>Connected</h2>
+  <table class="table">
+    <thead><tr><th>Name</th><th>Type</th><th>Jobs</th><th>Last sync</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for s in sources %}
+      <tr class="{{ 'disabled' if not s.enabled }}">
+        <td><a href="/sources/{{ s.id }}/edit">{{ s.name }}</a></td>
+        <td>{{ registry[s.kind].label if s.kind in registry else s.kind }}</td>
+        <td>{{ counts.get(s.id, 0) }}</td>
+        <td>{{ s.last_synced_at|timeago or 'never' }}</td>
+        <td>
+          {% if not s.enabled %}<span class="status">paused</span>
+          {% elif s.last_status == 'ok' %}<span class="status s-applied">ok · {{ s.last_count }} found</span>
+          {% elif s.last_status == 'error' %}<span class="status s-rejected" title="{{ s.last_error }}">error</span><div class="small warn">{{ s.last_error }}</div>
+          {% else %}<span class="status">pending</span>{% endif %}
+        </td>
+        <td class="actions">
+          <form method="post" action="/sources/{{ s.id }}/sync"><button class="btn tiny">Sync</button></form>
+          <form method="post" action="/sources/{{ s.id }}/toggle"><button class="btn tiny ghost">{{ 'Pause' if s.enabled else 'Resume' }}</button></form>
+          <form method="post" action="/sources/{{ s.id }}/delete" data-confirm="Remove {{ s.name }}?"><button class="btn tiny ghost danger">Remove</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<h2>Add a connection</h2>
+<p class="muted">Indeed, LinkedIn, Handshake and Glassdoor don't offer public APIs for job seekers and block automated logins, so JobRadar connects to them the two reliable ways: by reading the job alert emails those sites send you, and through job search APIs that index their listings. Company career pages (Greenhouse, Lever, Ashby, SmartRecruiters) are pulled directly.</p>
+<div class="source-grid">
+  {% for kind, adapter in registry.items() %}
+  <a class="source-tile" href="/sources/new?kind={{ kind }}">
+    <b>{{ adapter.label }}</b>
+    <span class="small">{{ adapter.covers }}</span>
+    <span class="muted small">{{ adapter.description }}</span>
+  </a>
+  {% endfor %}
+  <a class="source-tile" href="/import">
+    <b>Paste or upload an alert email</b>
+    <span class="small">Any job alert email, without connecting your inbox</span>
+    <span class="muted small">Forward-and-forget alternative to the IMAP connection.</span>
+  </a>
+</div>
+{% endblock %}

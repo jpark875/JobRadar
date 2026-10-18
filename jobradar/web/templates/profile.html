@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<h1>Profile</h1>
+<div class="grid2">
+  <div>
+    <section class="card" id="resume">
+      <h2>Resume</h2>
+      <form method="post" action="/profile/resume" enctype="multipart/form-data" class="upload">
+        <input type="file" name="file" accept=".pdf,.docx,.txt,.md" required>
+        <button class="btn small">Upload and analyze</button>
+      </form>
+      {% if profile.resume_filename %}<p class="muted small">Current: {{ profile.resume_filename }}</p>{% endif %}
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="resume">
+        <label>Skills found <span class="hint">Comma separated. Add anything the parser missed; these drive the match score.</span>
+          <textarea name="resume_skills" rows="4">{{ (profile.resume_skills or [])|join(', ') }}</textarea>
+        </label>
+        <label>Years of experience <input type="number" step="0.5" min="0" name="years_experience" value="{{ profile.years_experience }}"></label>
+        <details>
+          <summary>Extracted resume text</summary>
+          <textarea name="resume_text_preview" rows="10" readonly>{{ profile.resume_text }}</textarea>
+        </details>
+        <button class="btn small">Save and re-score</button>
+      </form>
+    </section>
+
+    <section class="card" id="preferences">
+      <h2>What you're looking for</h2>
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="preferences">
+        <label>Target titles <span class="hint">One per line. Also used as search keywords for job board APIs.</span>
+          <textarea name="target_titles" rows="3" placeholder="Software Engineer&#10;Data Analyst">{{ (profile.target_titles or [])|join('\n') }}</textarea>
+        </label>
+        <label>Locations <span class="hint">One per line, e.g. New York, Austin, TX</span>
+          <textarea name="locations" rows="2">{{ (profile.locations or [])|join('\n') }}</textarea>
+        </label>
+        <div class="row-fields">
+          <label class="inline"><input type="checkbox" name="remote_ok" {{ 'checked' if profile.remote_ok }}> Open to remote</label>
+          <label class="inline"><input type="checkbox" name="remote_only" {{ 'checked' if profile.remote_only }}> Remote only</label>
+        </div>
+        <div class="row-fields">
+          <label>Level
+            <select name="experience_level">
+              {% for level in levels %}<option value="{{ level }}" {{ 'selected' if profile.experience_level == level }}>{{ level|capitalize }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Minimum salary (USD/yr) <input type="number" name="min_salary" min="0" step="1000" value="{{ profile.min_salary }}"></label>
+          <label>Ignore postings older than (days) <input type="number" name="max_age_days" min="0" value="{{ profile.max_age_days }}"></label>
+        </div>
+        <label>Must include at least one of <span class="hint">Optional. Comma separated keywords.</span>
+          <input name="must_have_keywords" value="{{ (profile.must_have_keywords or [])|join(', ') }}">
+        </label>
+        <label>Hide titles containing <span class="hint">e.g. senior, staff, principal, clearance</span>
+          <input name="exclude_keywords" value="{{ (profile.exclude_keywords or [])|join(', ') }}">
+        </label>
+        <label>Hide companies <input name="excluded_companies" value="{{ (profile.excluded_companies or [])|join(', ') }}"></label>
+        <button class="btn small">Save and re-score</button>
+      </form>
+    </section>
+
+    <section class="card" id="schedule">
+      <h2>Pace and alerts</h2>
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="schedule">
+        <div class="row-fields">
+          <label>Daily application goal <input type="number" name="daily_goal" min="1" max="200" value="{{ profile.daily_goal }}"></label>
+          <label>Alert me at score ≥ <input type="number" name="alert_threshold" min="0" max="100" value="{{ profile.alert_threshold }}"></label>
+        </div>
+        <div class="row-fields">
+          <label>Check for jobs every (minutes) <input type="number" name="sync_interval_minutes" min="10" max="1440" value="{{ profile.sync_interval_minutes }}"></label>
+          <label>Daily digest hour (0-23, -1 off) <input type="number" name="digest_hour" min="-1" max="23" value="{{ profile.digest_hour }}"></label>
+          <label>Follow up after (days) <input type="number" name="follow_up_days" min="1" max="60" value="{{ profile.follow_up_days }}"></label>
+        </div>
+        <button class="btn small">Save</button>
+      </form>
+    </section>
+  </div>
+
+  <div>
+    <section class="card" id="personal">
+      <h2>Application details</h2>
+      <p class="muted small">Used by the browser extension to autofill application forms and by your templates.</p>
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="personal">
+        <label>Full name <input name="full_name" value="{{ profile.full_name }}"></label>
+        <div class="row-fields">
+          <label>Email <input type="email" name="email" value="{{ profile.email }}"></label>
+          <label>Phone <input name="phone" value="{{ profile.phone }}"></label>
+        </div>
+        <label>City, State <input name="city" value="{{ profile.city }}"></label>
+        <label>LinkedIn URL <input name="linkedin_url" value="{{ profile.linkedin_url }}"></label>
+        <div class="row-fields">
+          <label>GitHub URL <input name="github_url" value="{{ profile.github_url }}"></label>
+          <label>Portfolio / website <input name="portfolio_url" value="{{ profile.portfolio_url }}"></label>
+        </div>
+        <div class="row-fields">
+          <label>School <input name="school" value="{{ profile.school }}"></label>
+          <label>Degree <input name="degree" value="{{ profile.degree }}"></label>
+        </div>
+        <div class="row-fields">
+          <label>Graduation date <input name="graduation_date" value="{{ profile.graduation_date }}" placeholder="May 2026"></label>
+          <label>GPA <input name="gpa" value="{{ profile.gpa }}"></label>
+        </div>
+        <div class="row-fields">
+          <label class="inline"><input type="checkbox" name="work_authorized" {{ 'checked' if profile.work_authorized }}> Authorized to work</label>
+          <label class="inline"><input type="checkbox" name="needs_sponsorship" {{ 'checked' if profile.needs_sponsorship }}> Need sponsorship</label>
+        </div>
+        <button class="btn small">Save</button>
+      </form>
+    </section>
+
+    <section class="card" id="templates">
+      <h2>Cover letter template</h2>
+      <form method="post" action="/profile" class="stack">
+        <input type="hidden" name="section" value="templates">
+        <label>Highlight paragraph <span class="hint">Your strongest accomplishment. Inserted where {highlight} appears.</span>
+          <textarea name="resume_highlight" rows="3">{{ profile.resume_highlight }}</textarea>
+        </label>
+        <label>Template
+          <textarea name="cover_letter_template" rows="14">{{ profile.cover_letter_template }}</textarea>
+        </label>
+        <p class="muted small">Placeholders: {% for p in placeholders %}<code>{{ '{' ~ p ~ '}' }}</code> {% endfor %}</p>
+        <button class="btn small">Save</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

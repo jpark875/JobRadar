@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score, meta %}
+{% block title %}Today's queue{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Today's queue</h1>
+  <div class="actions">
+    <form method="post" action="/queue/fill"><button class="btn">Fill to daily goal</button></form>
+    {% if queue %}<form method="post" action="/queue/clear"><button class="btn ghost">Clear queue</button></form>{% endif %}
+  </div>
+</div>
+
+<section class="stats">
+  <div class="stat wide">
+    <span class="label">Progress</span>
+    <span class="value">{{ applied_today|length }}<small>/{{ goal }} applied</small></span>
+    <div class="bar"><i style="width: {{ [100, (applied_today|length / (goal or 1) * 100)|round|int]|min }}%"></i></div>
+  </div>
+  <div class="stat"><span class="label">Left in queue</span><span class="value">{{ queue|length }}</span></div>
+</section>
+
+<p class="muted">Work top to bottom. <b>Apply</b> opens the posting in a new tab and gives you a cover letter to copy. Come back and hit <b>Done</b>, or let the browser extension mark it for you when you submit.</p>
+
+<div class="list queue">
+{% for job in queue %}
+  <div class="job" data-queue-item="{{ job.id }}">
+    {{ score(job) }}
+    <div class="job-main">
+      <a class="job-title" href="/jobs/{{ job.id }}">{{ job.title }}</a>
+      {{ meta(job) }}
+      {% set d = job.score_details or {} %}
+      {% if d.missing_skills %}<div class="chips"><span class="muted small">Missing:</span>{% for s in d.missing_skills[:5] %}<span class="chip miss">{{ s }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    <div class="job-actions">
+      {% if job.link %}<a class="btn small" href="{{ job.link }}" target="_blank" rel="noopener" data-open-apply="{{ job.id }}">Apply</a>{% endif %}
+      <a class="btn small ghost" href="/jobs/{{ job.id }}">Cover letter</a>
+      <form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="applied"><button class="btn small ghost">Done</button></form>
+      <form method="post" action="/jobs/{{ job.id }}/status"><input type="hidden" name="status" value="dismissed"><button class="btn small ghost danger" title="Skip">Skip</button></form>
+    </div>
+  </div>
+{% else %}
+  <p class="muted empty">Your queue is empty. Hit <b>Fill to daily goal</b> to pull in your best open matches, or queue jobs from the <a href="/jobs">Jobs</a> page.</p>
+{% endfor %}
+</div>
+
+{% if applied_today %}
+<section class="card">
+  <h2>Applied today</h2>
+  {% for job in applied_today %}
+  <div class="row"><a href="/jobs/{{ job.id }}">{{ job.title }}</a> <span class="muted">at {{ job.company }} · {{ job.applied_at.strftime('%I:%M %p') }}</span></div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

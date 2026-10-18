@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Tracker{% endblock %}
+{% block content %}
+<h1>Application tracker</h1>
+{% if follow_ups %}
+<div class="flash warn-flash">{{ follow_ups|length }} application{{ 's' if follow_ups|length != 1 }} due for a follow-up:
+  {% for job in follow_ups[:5] %}<a href="/jobs/{{ job.id }}">{{ job.company or job.title }}</a>{{ ', ' if not loop.last }}{% endfor %}
+</div>
+{% endif %}
+<div class="board">
+  {% for status, jobs in columns.items() %}
+  <section class="column">
+    <h2>{{ status|capitalize }} <small class="muted">{{ jobs|length }}</small></h2>
+    {% for job in jobs %}
+    <div class="tile">
+      <a href="/jobs/{{ job.id }}">{{ job.title }}</a>
+      <div class="muted small">{{ job.company }}{% if job.applied_at %} · {{ job.applied_at.strftime('%b %d') }}{% endif %}</div>
+      {% if job.follow_up_on %}<div class="small {{ 'warn' if job in follow_ups }}">Follow up {{ job.follow_up_on.strftime('%b %d') }}</div>{% endif %}
+      <form method="post" action="/jobs/{{ job.id }}/status" class="move">
+        <select name="status" data-autosubmit>
+          {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == job.status }}>{{ s }}</option>{% endfor %}
+        </select>
+      </form>
+    </div>
+    {% else %}
+    <p class="muted small">Nothing here.</p>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

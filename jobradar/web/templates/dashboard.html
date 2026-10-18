@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_macros.html" import job_card %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% if setup_needed %}
+<section class="card setup">
+  <h2>Get set up</h2>
+  <ol>
+    <li class="{{ 'done' if profile.resume_text }}"><a href="/profile">Upload your resume and set what you're looking for</a></li>
+    <li class="{{ 'done' if stats.sources }}"><a href="/sources">Connect job sites</a> (job alert emails from Indeed, LinkedIn and Handshake, plus job board APIs)</li>
+    <li><a href="/alerts">Choose where to get alerts</a> (phone push, email, Discord or Slack)</li>
+  </ol>
+</section>
+{% endif %}
+
+<section class="stats">
+  <div class="stat">
+    <span class="label">Applied today</span>
+    <span class="value">{{ stats.applied_today }}<small>/{{ stats.daily_goal }}</small></span>
+    <div class="bar"><i style="width: {{ [100, (stats.applied_today / (stats.daily_goal or 1) * 100)|round|int]|min }}%"></i></div>
+  </div>
+  <div class="stat"><span class="label">Streak</span><span class="value">{{ stats.streak }}<small> day{{ '' if stats.streak == 1 else 's' }}</small></span></div>
+  <div class="stat"><span class="label">Applied this week</span><span class="value">{{ stats.applied_week }}</span></div>
+  <div class="stat"><span class="label">New in 24h</span><span class="value">{{ stats.new_24h }}</span></div>
+  <div class="stat"><span class="label">Interviews</span><span class="value">{{ stats.by_status.get('interviewing', 0) }}</span></div>
+</section>
+
+{% if stats.last_run %}
+<p class="muted small">
+  Last sync {{ stats.last_run.started_at|timeago }}: {{ stats.last_run.fetched }} postings checked, {{ stats.last_run.new_jobs }} new, {{ stats.last_run.alerted }} alerted.
+  {% if stats.last_run.errors %}<span class="warn">{{ stats.last_run.errors|length }} source error(s): {{ stats.last_run.errors|join('; ') }}</span>{% endif %}
+</p>
+{% endif %}
+
+<div class="grid2">
+  <section class="card">
+    <div class="card-head">
+      <h2>Fresh matches</h2>
+      <a href="/jobs?sort=newest&days=2">See all new</a>
+    </div>
+    {% for job in fresh %}{{ job_card(job) }}{% else %}<p class="muted">Nothing new in the last two days yet.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <div class="card-head">
+      <h2>Best open matches</h2>
+      <form method="post" action="/queue/fill"><button class="btn small">Fill today's queue</button></form>
+    </div>
+    {% for job in top %}{{ job_card(job) }}{% else %}<p class="muted">Connect a source and upload your resume to see recommendations.</p>{% endfor %}
+  </section>
+</div>
+
+{% if follow_ups %}
+<section class="card">
+  <div class="card-head"><h2>Follow-ups due</h2><a href="/tracker">Tracker</a></div>
+  {% for job in follow_ups %}
+  <div class="row">
+    <a href="/jobs/{{ job.id }}">{{ job.title }}</a> <span class="muted">at {{ job.company }} · applied {{ job.applied_at|timeago }}</span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
