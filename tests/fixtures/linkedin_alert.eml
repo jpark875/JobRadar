@@ -1,0 +1,43 @@
+From: LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>
+To: alex@example.com
+Subject: "software engineer": Acme Robotics - Software Engineer and more
+Date: Thu, 15 Oct 2026 14:02:11 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset="utf-8"
+
+Your job alert for software engineer
+
+--b1
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<table><tr><td><h2>Your job alert for software engineer in Seattle, WA</h2></td></tr>
+<tr><td>
+  <table><tr>
+    <td><img src="https://media.licdn.com/logo1.png" alt="Acme Robotics"></td>
+    <td>
+      <a href="https://www.linkedin.com/comm/jobs/view/3901234567/?trackingId=abc%3D&amp;refId=xyz">Software Engineer</a>
+      <p>Acme Robotics &middot; Seattle, WA (Hybrid)</p>
+      <p>Actively recruiting</p>
+      <p>Easy Apply</p>
+    </td>
+  </tr></table>
+</td></tr>
+<tr><td>
+  <table><tr>
+    <td>
+      <a href="https://www.linkedin.com/comm/jobs/view/3907654321/?trackingId=def">Backend Engineer, Payments</a>
+      <p>Northwind Pay &middot; United States (Remote)</p>
+      <p>$130K/yr - $160K/yr</p>
+    </td>
+  </tr></table>
+</td></tr>
+<tr><td><a href="https://www.linkedin.com/comm/jobs/search?keywords=software">See all jobs</a></td></tr>
+<tr><td><a href="https://www.linkedin.com/comm/psettings/email-unsubscribe">Unsubscribe</a></td></tr>
+</table>
+</body></html>
+
+--b1--
